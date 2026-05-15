@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>LLM Knowledge Wiki</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Space+Mono:wght@400;700&amp;family=Courier+Prime:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-background": "#e5e2e1",
+                        "inverse-primary": "#006e16",
+                        "outline": "#84967e",
+                        "error": "#ffb4ab",
+                        "primary-container": "#00ff41",
+                        "secondary": "#fff9ef",
+                        "on-primary-fixed-variant": "#00530e",
+                        "tertiary-container": "#c7deff",
+                        "on-primary-fixed": "#002203",
+                        "on-secondary-fixed": "#221b00",
+                        "surface-variant": "#353535",
+                        "tertiary": "#f7f8ff",
+                        "surface-bright": "#393939",
+                        "on-tertiary-fixed": "#001d36",
+                        "surface-dim": "#131313",
+                        "on-error-container": "#ffdad6",
+                        "outline-variant": "#3b4b37",
+                        "on-primary": "#003907",
+                        "inverse-on-surface": "#313030",
+                        "tertiary-fixed": "#d2e4ff",
+                        "primary": "#ebffe2",
+                        "surface": "#131313",
+                        "surface-container": "#20201f",
+                        "on-tertiary": "#003259",
+                        "on-surface-variant": "#b9ccb2",
+                        "on-tertiary-fixed-variant": "#00497e",
+                        "primary-fixed": "#72ff70",
+                        "background": "#131313",
+                        "secondary-container": "#ffdb3c",
+                        "tertiary-fixed-dim": "#9fcaff",
+                        "surface-tint": "#00e639",
+                        "on-tertiary-container": "#0063a8",
+                        "surface-container-low": "#1c1b1b",
+                        "on-secondary-container": "#725f00",
+                        "inverse-surface": "#e5e2e1",
+                        "on-error": "#690005",
+                        "error-container": "#93000a",
+                        "on-primary-container": "#007117",
+                        "secondary-fixed": "#ffe16d",
+                        "secondary-fixed-dim": "#e9c400",
+                        "on-secondary-fixed-variant": "#544600",
+                        "surface-container-highest": "#353535",
+                        "primary-fixed-dim": "#00e639",
+                        "on-secondary": "#3a3000",
+                        "surface-container-high": "#2a2a2a",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-surface": "#e5e2e1"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "pixel-unit": "4px",
+                        "container-padding": "24px",
+                        "gutter": "16px",
+                        "sidebar-width": "280px"
+                    },
+                    "fontFamily": {
+                        "code-block": [
+                            "JetBrains Mono"
+                        ],
+                        "body-lg": [
+                            "JetBrains Mono"
+                        ],
+                        "label-sm": [
+                            "Courier Prime"
+                        ],
+                        "headline-lg": [
+                            "Space Mono"
+                        ],
+                        "headline-md": [
+                            "Space Mono"
+                        ],
+                        "body-md": [
+                            "JetBrains Mono"
+                        ]
+                    },
+                    "fontSize": {
+                        "code-block": [
+                            "14px",
+                            {
+                                "lineHeight": "22px",
+                                "fontWeight": "400"
+                            }
+                        ],
+                        "body-lg": [
+                            "18px",
+                            {
+                                "lineHeight": "28px",
+                                "fontWeight": "400"
+                            }
+                        ],
+                        "label-sm": [
+                            "12px",
+                            {
+                                "lineHeight": "16px",
+                                "fontWeight": "700"
+                            }
+                        ],
+                        "headline-lg": [
+                            "32px",
+                            {
+                                "lineHeight": "40px",
+                                "letterSpacing": "-1px",
+                                "fontWeight": "700"
+                            }
+                        ],
+                        "headline-md": [
+                            "24px",
+                            {
+                                "lineHeight": "32px",
+                                "fontWeight": "700"
+                            }
+                        ],
+                        "body-md": [
+                            "14px",
+                            {
+                                "lineHeight": "20px",
+                                "fontWeight": "400"
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background');
+            background-image: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.15),
+                rgba(0, 0, 0, 0.15) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+        }
+        .pixel-border {
+            box-shadow: 
+                inset 2px 2px 0px 0px rgba(255, 255, 255, 0.1),
+                inset -2px -2px 0px 0px rgba(0, 0, 0, 0.5);
+            border: 4px solid theme('colors.outline-variant');
+        }
+        .pixel-border-gold {
+            box-shadow: 
+                inset 2px 2px 0px 0px rgba(255, 255, 255, 0.3),
+                inset -2px -2px 0px 0px rgba(0, 0, 0, 0.5);
+            border: 4px solid theme('colors.secondary-container');
+        }
+        .parchment-bg {
+            background-color: theme('colors.secondary');
+            background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.05"/></svg>');
+        }
+    </style>
+</head>
+<body class="text-on-background min-h-screen flex flex-col md:flex-row">
+<!-- TopAppBar (Mobile Only) -->
+<header class="md:hidden fixed top-0 w-full z-50 flex justify-between items-center px-container-padding h-16 bg-surface border-b-4 border-outline-variant shadow-none">
+<div class="font-headline-lg text-headline-lg text-primary-container uppercase tracking-widest">
+            OPENCODE
+        </div>
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-primary hover:bg-surface-variant hover:text-primary-container p-2 rounded transition-colors cursor-pointer" data-icon="settings">settings</span>
+</div>
+</header>
+<!-- SideNavBar (Desktop Only) -->
+<nav class="hidden md:flex fixed left-0 top-0 h-full w-sidebar-width flex-col p-4 z-40 bg-surface-container border-r-4 border-outline-variant">
+<div class="mb-8 flex items-center gap-4 border-b-4 border-outline-variant pb-4">
+<img alt="SD Pixel Agent" class="w-12 h-12 pixel-border" data-alt="A small square portrait of a pixelated wizard character with a glowing blue staff, set against a dark grey stone background. Retro 16-bit RPG style with high contrast colors and brutalist borders." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEetbzfi3lyDtSpqaF93oGhz4Cbznktwa53SM7tyjO677ICHXeFkRQ9838zUxCM2nBuMIhp8Z02T1mVelxgB2ZTeRZjNhlEY4QfhoiHjXT7FfbtZ80BhmrSxv8x5FnJjGAO7iFZC025_2aZKELjkq1cjkNi9ifJIA9YmjbnblaqftiuVWJQIwC7NdBA6ccrrruiZjo1x7n-vPlOUOO-dzqqR8m1kKg9io2wUNlAeDYkd-9I1aQdWFgbgI0Cv3dBfrSRf_yb8U4Q5oX"/>
+<div>
+<h1 class="font-headline-md text-headline-md text-primary">ARCHMAGE</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant">LVL 99 AGENT</p>
+</div>
+</div>
+<ul class="flex flex-col gap-2 font-body-md text-body-md flex-grow">
+<li>
+<a class="flex items-center gap-3 p-3 text-on-surface-variant opacity-80 hover:bg-surface-variant hover:border-2 hover:border-outline hover:translate-x-1 transition-all duration-75" href="#">
+<span class="material-symbols-outlined" data-icon="swords">swords</span>
+                    Dashboard
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 p-3 bg-secondary-container text-on-secondary-container border-2 border-primary shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-1 transition-all duration-75" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+                    Wiki
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 p-3 text-on-surface-variant opacity-80 hover:bg-surface-variant hover:border-2 hover:border-outline hover:translate-x-1 transition-all duration-75" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+                    Settings
+                </a>
+</li>
+</ul>
+<button class="mt-auto pixel-border-gold bg-surface-variant text-secondary-container font-headline-md text-headline-md py-3 active:translate-y-1 active:translate-x-1 transition-transform">
+            CAST SPELL
+        </button>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 mt-16 md:mt-0 md:ml-sidebar-width p-4 md:p-8 flex flex-col gap-8 pb-20 md:pb-8">
+<!-- Search Bar (Scroll Style) -->
+<div class="relative w-full max-w-3xl mx-auto pixel-border bg-surface p-2">
+<div class="absolute left-4 top-1/2 -translate-y-1/2">
+<span class="material-symbols-outlined text-primary-container">search</span>
+</div>
+<input class="w-full bg-surface-dim text-primary-container font-code-block text-code-block pl-12 pr-4 py-3 border-none focus:ring-2 focus:ring-primary-container focus:outline-none placeholder-outline" placeholder="Search the ancient tomes..." type="text"/>
+</div>
+<!-- Categories Sidebar + Content Area -->
+<div class="flex flex-col lg:flex-row gap-8 items-start">
+<!-- Knowledge Categories -->
+<aside class="w-full lg:w-64 flex-shrink-0 pixel-border bg-surface-container p-4">
+<h2 class="font-headline-md text-headline-md text-primary mb-4 border-b-2 border-outline-variant pb-2">Tomes</h2>
+<ul class="flex flex-col gap-2 font-body-md text-body-md">
+<li><a class="block p-2 text-primary-container bg-surface-variant border border-primary-container" href="#">Architecture</a></li>
+<li><a class="block p-2 text-on-surface-variant hover:bg-surface-variant hover:text-primary-container transition-colors" href="#">Specs</a></li>
+<li><a class="block p-2 text-on-surface-variant hover:bg-surface-variant hover:text-primary-container transition-colors" href="#">History</a></li>
+<li><a class="block p-2 text-on-surface-variant hover:bg-surface-variant hover:text-primary-container transition-colors" href="#">Spells (API)</a></li>
+<li><a class="block p-2 text-on-surface-variant hover:bg-surface-variant hover:text-primary-container transition-colors" href="#">Lore (Logs)</a></li>
+</ul>
+</aside>
+<!-- Book Grid -->
+<div class="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+<!-- Book Card 1 -->
+<article class="parchment-bg pixel-border p-6 text-on-secondary-fixed flex flex-col gap-4 hover:translate-y-[-4px] transition-transform cursor-pointer shadow-[8px_8px_0px_0px_rgba(0,0,0,0.5)]">
+<div class="flex items-center gap-3 border-b-2 border-outline pb-2">
+<span class="material-symbols-outlined text-4xl text-on-secondary-fixed-variant" data-icon="book_4">book_4</span>
+<h3 class="font-headline-md text-headline-md text-on-secondary-fixed">Core Neural Network</h3>
+</div>
+<p class="font-body-md text-body-md text-on-secondary-fixed-variant flex-1">
+                        Foundational theories and structures defining the central processing node of the Archmage system.
+                    </p>
+<div class="font-label-sm text-label-sm flex justify-between items-center text-outline">
+<span>Read: 5m</span>
+<span class="bg-surface-variant text-primary px-2 py-1 pixel-border border-2">Lv. 1</span>
+</div>
+</article>
+<!-- Book Card 2 -->
+<article class="parchment-bg pixel-border p-6 text-on-secondary-fixed flex flex-col gap-4 hover:translate-y-[-4px] transition-transform cursor-pointer shadow-[8px_8px_0px_0px_rgba(0,0,0,0.5)]">
+<div class="flex items-center gap-3 border-b-2 border-outline pb-2">
+<span class="material-symbols-outlined text-4xl text-on-secondary-fixed-variant" data-icon="auto_stories">auto_stories</span>
+<h3 class="font-headline-md text-headline-md text-on-secondary-fixed">Prompt Alchemy</h3>
+</div>
+<p class="font-body-md text-body-md text-on-secondary-fixed-variant flex-1">
+                        Advanced techniques for crafting precise incantations to elicit optimal responses from the LLM core.
+                    </p>
+<div class="font-label-sm text-label-sm flex justify-between items-center text-outline">
+<span>Read: 12m</span>
+<span class="bg-surface-variant text-primary px-2 py-1 pixel-border border-2">Lv. 3</span>
+</div>
+</article>
+<!-- Book Card 3 -->
+<article class="parchment-bg pixel-border p-6 text-on-secondary-fixed flex flex-col gap-4 hover:translate-y-[-4px] transition-transform cursor-pointer shadow-[8px_8px_0px_0px_rgba(0,0,0,0.5)]">
+<div class="flex items-center gap-3 border-b-2 border-outline pb-2">
+<span class="material-symbols-outlined text-4xl text-on-secondary-fixed-variant" data-icon="local_library">local_library</span>
+<h3 class="font-headline-md text-headline-md text-on-secondary-fixed">Vector DB Runes</h3>
+</div>
+<p class="font-body-md text-body-md text-on-secondary-fixed-variant flex-1">
+                        Understanding the embedding space and retrieval mechanisms for the agent's long-term memory storage.
+                    </p>
+<div class="font-label-sm text-label-sm flex justify-between items-center text-outline">
+<span>Read: 8m</span>
+<span class="bg-surface-variant text-primary px-2 py-1 pixel-border border-2">Lv. 2</span>
+</div>
+</article>
+<!-- Book Card 4 -->
+<article class="parchment-bg pixel-border p-6 text-on-secondary-fixed flex flex-col gap-4 hover:translate-y-[-4px] transition-transform cursor-pointer shadow-[8px_8px_0px_0px_rgba(0,0,0,0.5)]">
+<div class="flex items-center gap-3 border-b-2 border-outline pb-2">
+<span class="material-symbols-outlined text-4xl text-on-secondary-fixed-variant" data-icon="menu_book">menu_book</span>
+<h3 class="font-headline-md text-headline-md text-on-secondary-fixed">Token Economics</h3>
+</div>
+<p class="font-body-md text-body-md text-on-secondary-fixed-variant flex-1">
+                        Managing mana consumption. Strategies for context window optimization and cost reduction.
+                    </p>
+<div class="font-label-sm text-label-sm flex justify-between items-center text-outline">
+<span>Read: 15m</span>
+<span class="bg-surface-variant text-primary px-2 py-1 pixel-border border-2">Lv. 4</span>
+</div>
+</article>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-12 px-4 border-t-4 border-outline-variant bg-surface">
+<a class="flex items-center gap-1 font-code-block text-code-block text-on-surface hover:text-primary-fixed-dim transition-colors duration-100" href="#">
+<span class="material-symbols-outlined text-error" data-icon="favorite">favorite</span>
+<span class="hidden sm:inline">HP: 100%</span>
+</a>
+<a class="flex items-center gap-1 font-code-block text-code-block text-on-surface hover:text-primary-fixed-dim transition-colors duration-100" href="#">
+<span class="material-symbols-outlined text-error" data-icon="bolt">bolt</span>
+<span class="hidden sm:inline">MP: 750</span>
+</a>
+<a class="flex items-center gap-1 font-code-block text-code-block text-on-surface hover:text-primary-fixed-dim transition-colors duration-100" href="#">
+<span class="material-symbols-outlined text-error" data-icon="grade">grade</span>
+<span class="hidden sm:inline">XP: 12.4k</span>
+</a>
+</nav>
+</body></html>

@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Live Session Log &amp; History</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Space+Mono:wght@400;700&amp;family=Courier+Prime:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-background": "#e5e2e1",
+                        "inverse-primary": "#006e16",
+                        "outline": "#84967e",
+                        "error": "#ffb4ab",
+                        "primary-container": "#00ff41",
+                        "secondary": "#fff9ef",
+                        "on-primary-fixed-variant": "#00530e",
+                        "tertiary-container": "#c7deff",
+                        "on-primary-fixed": "#002203",
+                        "on-secondary-fixed": "#221b00",
+                        "surface-variant": "#353535",
+                        "tertiary": "#f7f8ff",
+                        "surface-bright": "#393939",
+                        "on-tertiary-fixed": "#001d36",
+                        "surface-dim": "#131313",
+                        "on-error-container": "#ffdad6",
+                        "outline-variant": "#3b4b37",
+                        "on-primary": "#003907",
+                        "inverse-on-surface": "#313030",
+                        "tertiary-fixed": "#d2e4ff",
+                        "primary": "#ebffe2",
+                        "surface": "#131313",
+                        "surface-container": "#20201f",
+                        "on-tertiary": "#003259",
+                        "on-surface-variant": "#b9ccb2",
+                        "on-tertiary-fixed-variant": "#00497e",
+                        "primary-fixed": "#72ff70",
+                        "background": "#131313",
+                        "secondary-container": "#ffdb3c",
+                        "tertiary-fixed-dim": "#9fcaff",
+                        "surface-tint": "#00e639",
+                        "on-tertiary-container": "#0063a8",
+                        "surface-container-low": "#1c1b1b",
+                        "on-secondary-container": "#725f00",
+                        "inverse-surface": "#e5e2e1",
+                        "on-error": "#690005",
+                        "error-container": "#93000a",
+                        "on-primary-container": "#007117",
+                        "secondary-fixed": "#ffe16d",
+                        "secondary-fixed-dim": "#e9c400",
+                        "on-secondary-fixed-variant": "#544600",
+                        "surface-container-highest": "#353535",
+                        "primary-fixed-dim": "#00e639",
+                        "on-secondary": "#3a3000",
+                        "surface-container-high": "#2a2a2a",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-surface": "#e5e2e1"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "pixel-unit": "4px",
+                        "container-padding": "24px",
+                        "gutter": "16px",
+                        "sidebar-width": "280px"
+                    },
+                    "fontFamily": {
+                        "code-block": ["JetBrains Mono"],
+                        "body-lg": ["JetBrains Mono"],
+                        "label-sm": ["Courier Prime"],
+                        "headline-lg": ["Space Mono"],
+                        "headline-md": ["Space Mono"],
+                        "body-md": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "code-block": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "700" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-1px", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .crt-overlay {
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+        .pixel-border {
+            border: 4px solid #4a4a4a;
+            border-top-color: #7a7a7a;
+            border-left-color: #7a7a7a;
+            border-bottom-color: #2a2a2a;
+            border-right-color: #2a2a2a;
+        }
+        .pixel-border-gold {
+            border: 4px solid #ffd700;
+            border-top-color: #ffea70;
+            border-left-color: #ffea70;
+            border-bottom-color: #b39700;
+            border-right-color: #b39700;
+        }
+        .pixel-border-inset {
+            border: 4px solid #4a4a4a;
+            border-top-color: #2a2a2a;
+            border-left-color: #2a2a2a;
+            border-bottom-color: #7a7a7a;
+            border-right-color: #7a7a7a;
+        }
+        .scanline {
+            width: 100%;
+            height: 100px;
+            z-index: 9999;
+            position: absolute;
+            pointer-events: none;
+            background: linear-gradient(0deg, rgba(0,0,0,0) 0%, rgba(0,255,65,0.2) 50%, rgba(0,0,0,0) 100%);
+            opacity: 0.1;
+            animation: scanline 10s linear infinite;
+        }
+        @keyframes scanline {
+            0% { transform: translateY(-100px); }
+            100% { transform: translateY(100vh); }
+        }
+        .flicker-text {
+            animation: textShadow 1.6s infinite;
+        }
+        @keyframes textShadow {
+            0% { text-shadow: 0.4389924193300864px 0 1px rgba(0,255,65,0.5), -0.4389924193300864px 0 1px rgba(0,255,65,0.3), 0 0 3px; }
+            5% { text-shadow: 2.7928974010788217px 0 1px rgba(0,255,65,0.5), -2.7928974010788217px 0 1px rgba(0,255,65,0.3), 0 0 3px; }
+            100% { text-shadow: 0.4389924193300864px 0 1px rgba(0,255,65,0.5), -0.4389924193300864px 0 1px rgba(0,255,65,0.3), 0 0 3px; }
+        }
+        .diff-add {
+            background-color: rgba(0, 255, 65, 0.1);
+            border-left: 2px solid #00ff41;
+        }
+        .diff-remove {
+            background-color: rgba(255, 180, 171, 0.1);
+            border-left: 2px solid #ffb4ab;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md h-screen overflow-hidden flex flex-col relative selection:bg-primary-container selection:text-on-primary-container">
+<div class="fixed inset-0 crt-overlay z-50"></div>
+<div class="scanline"></div>
+<!-- TopAppBar (Web) -->
+<header class="hidden md:flex fixed top-0 w-full z-40 justify-between items-center px-container-padding h-16 bg-surface border-b-4 border-outline-variant dark:border-outline-variant">
+<div class="flex items-center gap-4">
+<span class="font-headline-lg text-headline-lg text-primary-container dark:text-primary-fixed uppercase tracking-widest flicker-text">OPENCODE</span>
+<nav class="flex items-center ml-8 gap-6">
+<a class="text-on-surface-variant font-headline-md text-headline-md hover:bg-surface-variant hover:text-primary-container px-2 py-1" href="#">Wiki</a>
+</nav>
+</div>
+<div class="flex items-center gap-4 text-primary dark:text-primary-fixed">
+<button class="hover:bg-surface-variant hover:text-primary-container p-2 active:translate-y-1 active:translate-x-1 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
+</button>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="hidden md:flex fixed left-0 top-0 h-full w-sidebar-width flex-col p-4 z-30 bg-surface-container dark:bg-surface-container border-r-4 border-outline-variant pt-20">
+<div class="flex items-center gap-4 mb-8 pixel-border bg-surface-dim p-3">
+<div class="w-12 h-12 bg-surface-variant pixel-border flex items-center justify-center overflow-hidden">
+<img alt="SD Pixel Agent avatar, 16-bit retro style portrait of a fantasy wizard character with a glowing staff" class="w-full h-full object-cover rendering-pixelated" data-alt="A pixel-art style portrait of a fantasy wizard character. The character is wearing dark robes and holding a glowing green staff. The background is a dark, dungeon-like stone wall. The overall style is reminiscent of 16-bit RPG video games, with a distinct retro-modern brutalist aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBqaUsUAmjcKl4SRp_4G1StRdfMvW3jzO_B0oxnXJlSV3d6OklY-Aaa4rAQFrc6aHFWqyXZfYw6B4y3spdbseyWE176RvkK6bxz5I5onCfbyj0kMPU7oJLboO7qRzMLJEtq4rJijK5yFDNFxW-7UL9a2UyS-FizlajfywGoJG0B-_ykX5ZLy9V2nnqSQnOA0h2Et2C0Yn5-1NLywczLJ9N8EGUzgF2y9H6G4ki5Xlq9OIDBW_EZ3a_axXWUSqrr6GmY5wJjSnWkGjbO"/>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md text-primary">ARCHMAGE</h2>
+<p class="font-label-sm text-label-sm text-primary-fixed">LVL 99 AGENT</p>
+</div>
+</div>
+<nav class="flex flex-col gap-2 flex-grow">
+<a class="flex items-center gap-3 p-3 font-body-md text-body-md text-on-surface-variant opacity-80 hover:bg-surface-variant hover:border-2 hover:border-outline hover:translate-x-1 transition-all duration-75" href="#">
+<span class="material-symbols-outlined">swords</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-3 p-3 font-body-md text-body-md text-on-surface-variant opacity-80 hover:bg-surface-variant hover:border-2 hover:border-outline hover:translate-x-1 transition-all duration-75" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+                Wiki
+            </a>
+<a class="flex items-center gap-3 p-3 font-body-md text-body-md text-on-surface-variant opacity-80 hover:bg-surface-variant hover:border-2 hover:border-outline hover:translate-x-1 transition-all duration-75" href="#">
+<span class="material-symbols-outlined">settings</span>
+                Settings
+            </a>
+<div class="mt-4 flex items-center gap-3 p-3 font-body-md text-body-md bg-secondary-container text-on-secondary-container border-2 border-primary shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<span class="material-symbols-outlined">history</span>
+                Session Log
+            </div>
+</nav>
+<button class="mt-auto pixel-border-gold bg-surface-variant text-secondary-container font-headline-md text-headline-md py-3 active:translate-y-[2px] active:translate-x-[2px] hover:brightness-125 transition-all">
+            CAST SPELL
+        </button>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-grow flex flex-col md:ml-sidebar-width md:pt-16 p-4 md:p-gutter gap-gutter overflow-hidden h-full">
+<!-- Header Section -->
+<div class="flex justify-between items-end border-b-4 border-outline-variant pb-2">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-primary-container flicker-text">&gt; QUEST_LOG: Active Session</h1>
+<p class="font-code-block text-code-block text-on-surface-variant mt-1">Tracking agent orchestration and spell casting...</p>
+</div>
+<div class="text-right flex items-center gap-4">
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-primary-fixed block">SESSION ID</span>
+<span class="font-code-block text-code-block">0x9F4A_88B2</span>
+</div>
+<div class="h-8 w-4 bg-primary-container animate-pulse"></div>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter flex-grow overflow-hidden">
+<!-- Terminal Log Window (Left, Wider) -->
+<div class="md:col-span-8 flex flex-col gap-gutter overflow-hidden">
+<div class="pixel-border bg-surface-dim flex flex-col h-full overflow-hidden relative">
+<!-- Title Bar -->
+<div class="bg-surface-variant border-b-4 border-outline-variant p-2 flex justify-between items-center">
+<span class="font-label-sm text-label-sm text-primary">TERMINAL.EXE</span>
+<div class="flex gap-2">
+<div class="w-3 h-3 bg-error-container pixel-border"></div>
+<div class="w-3 h-3 bg-secondary-container pixel-border"></div>
+<div class="w-3 h-3 bg-primary-container pixel-border"></div>
+</div>
+</div>
+<!-- Log Content -->
+<div class="p-4 flex-grow overflow-y-auto font-code-block text-code-block text-on-surface space-y-4">
+<div class="flex gap-3">
+<span class="text-on-surface-variant">[10:42:01]</span>
+<span class="text-primary-container">SYSTEM:</span>
+<span>Session initiated. Establishing link to OpenCode nexus...</span>
+</div>
+<div class="flex gap-3">
+<span class="text-on-surface-variant">[10:42:05]</span>
+<span class="text-secondary-fixed">Agent [Mage]:</span>
+<span>Analyzing quest parameters: "Build a robust authentication module in Rust."</span>
+</div>
+<div class="flex gap-3">
+<span class="text-on-surface-variant">[10:42:12]</span>
+<span class="text-secondary-fixed">Agent [Mage]</span>
+<span class="text-error">cast [Rust Generator]!</span>
+</div>
+<div class="ml-12 p-3 pixel-border-inset bg-surface-container-lowest text-on-surface-variant border-l-4 border-l-secondary-fixed">
+<p class="text-primary-fixed mb-2 font-label-sm text-label-sm">QUEST LOG ENTRY:</p>
+<p>"Selected 'Rust Generator' skill due to high performance requirements outlined in the prompt. Utilizing the `axum` framework for routing."</p>
+</div>
+<div class="flex gap-3">
+<span class="text-on-surface-variant">[10:43:05]</span>
+<span class="text-error">SYSTEM WARNING:</span>
+<span>Compiler encountered a lifetime error in `auth_handler.rs` at line 42.</span>
+</div>
+<div class="flex gap-3">
+<span class="text-on-surface-variant">[10:43:08]</span>
+<span class="text-tertiary-container">Agent [Warrior]</span>
+<span class="text-primary-fixed">defended against [Syntax Error]!</span>
+</div>
+<div class="ml-12 p-3 pixel-border-inset bg-surface-container-lowest text-on-surface-variant border-l-4 border-l-tertiary-container">
+<p class="text-primary-fixed mb-2 font-label-sm text-label-sm">QUEST LOG ENTRY:</p>
+<p>"Intercepted lifetime mismatch. Applying `Arc<mutex<t>&gt;` to shared state to satisfy borrow checker requirements."</mutex<t></p>
+</div>
+<!-- Blinking Cursor -->
+<div class="flex gap-3 items-center mt-4">
+<span class="text-primary-container">&gt;</span>
+<span class="w-2.5 h-4 bg-primary-container animate-pulse inline-block"></span>
+</div>
+</div>
+</div>
+</div>
+<!-- Side Panel (Right) -->
+<div class="md:col-span-4 flex flex-col gap-gutter overflow-hidden">
+<!-- Loot / Scroll Updates (Diff View) -->
+<div class="pixel-border bg-surface-dim flex flex-col h-[60%] overflow-hidden">
+<div class="bg-surface-variant border-b-4 border-outline-variant p-2 flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary-container">Scroll</span>
+<span class="font-label-sm text-label-sm text-primary">SCROLL UPDATES (LOOT)</span>
+</div>
+<div class="p-3 flex-grow overflow-y-auto font-code-block text-code-block text-sm space-y-2">
+<div class="mb-2 text-on-surface-variant font-label-sm text-label-sm">File: src/auth_handler.rs</div>
+<div class="diff-remove p-1 flex">
+<span class="w-6 text-error opacity-70 select-none">-</span>
+<span class="text-error">let state = app_state.clone();</span>
+</div>
+<div class="diff-remove p-1 flex">
+<span class="w-6 text-error opacity-70 select-none">-</span>
+<span class="text-error">let user = state.db.get_user(id);</span>
+</div>
+<div class="diff-add p-1 flex">
+<span class="w-6 text-primary-container opacity-70 select-none">+</span>
+<span class="text-primary-container">let state = Arc::clone(&amp;app_state);</span>
+</div>
+<div class="diff-add p-1 flex">
+<span class="w-6 text-primary-container opacity-70 select-none">+</span>
+<span class="text-primary-container">let mut db = state.db.lock().await;</span>
+</div>
+<div class="diff-add p-1 flex">
+<span class="w-6 text-primary-container opacity-70 select-none">+</span>
+<span class="text-primary-container">let user = db.get_user(id).await?;</span>
+</div>
+</div>
+</div>
+<!-- Agent Status -->
+<div class="pixel-border bg-surface-dim p-4 flex-grow">
+<h3 class="font-headline-md text-headline-md text-secondary-container border-b-2 border-outline-variant pb-2 mb-4">PARTY STATUS</h3>
+<div class="space-y-4">
+<!-- Mage Status -->
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="font-label-sm text-label-sm text-on-surface">[Mage] Confidence</span>
+<span class="font-label-sm text-label-sm text-primary-fixed">85%</span>
+</div>
+<div class="h-4 bg-surface-container-highest pixel-border-inset w-full">
+<div class="h-full bg-primary-fixed w-[85%] border-r-2 border-primary-container"></div>
+</div>
+</div>
+<!-- Warrior Status -->
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="font-label-sm text-label-sm text-on-surface">[Warrior] Stamina</span>
+<span class="font-label-sm text-label-sm text-secondary-fixed">60%</span>
+</div>
+<div class="h-4 bg-surface-container-highest pixel-border-inset w-full">
+<div class="h-full bg-secondary-fixed w-[60%] border-r-2 border-secondary-container"></div>
+</div>
+</div>
+<!-- Global Mana -->
+<div class="mt-6 pt-4 border-t-2 border-outline-variant">
+<div class="flex justify-between items-center mb-1">
+<span class="font-label-sm text-label-sm text-tertiary-container">GLOBAL MANA (Tokens)</span>
+<span class="font-code-block text-code-block text-tertiary-container">4,250 / 10k</span>
+</div>
+<div class="h-6 bg-surface-container-highest pixel-border-inset w-full relative overflow-hidden">
+<div class="h-full bg-on-tertiary-fixed-variant w-[42%] border-r-2 border-tertiary-container relative">
+<div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPjxyZWN0IHdpZHRoPSI0IiBoZWlnaHQ9IjQiIGZpbGw9InRyYW5zcGFyZW50Ii8+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4yKSIvPjwvc3ZnPg==')]"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-12 px-4 border-t-4 border-outline-variant bg-surface bg-surface-container-highest dark:bg-surface-container-highest">
+<div class="flex flex-col items-center justify-center text-on-surface hover:text-primary-fixed-dim transition-colors duration-100">
+<span class="material-symbols-outlined text-[20px]">swords</span>
+<span class="font-code-block text-code-block text-[10px]">Dashboard</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface hover:text-primary-fixed-dim transition-colors duration-100">
+<span class="material-symbols-outlined text-[20px]">menu_book</span>
+<span class="font-code-block text-code-block text-[10px]">Wiki</span>
+</div>
+<div class="flex flex-col items-center justify-center text-primary-fixed brightness-125 transition-colors duration-100">
+<span class="material-symbols-outlined text-[20px]">history</span>
+<span class="font-code-block text-code-block text-[10px]">Log</span>
+</div>
+</nav>
+</body></html>
