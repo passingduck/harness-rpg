@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Agent Skill Tree</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS Setup -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-background": "#e5e2e1",
+                    "inverse-primary": "#006e16",
+                    "outline": "#84967e",
+                    "error": "#ffb4ab",
+                    "primary-container": "#00ff41",
+                    "secondary": "#fff9ef",
+                    "on-primary-fixed-variant": "#00530e",
+                    "tertiary-container": "#c7deff",
+                    "on-primary-fixed": "#002203",
+                    "on-secondary-fixed": "#221b00",
+                    "surface-variant": "#353535",
+                    "tertiary": "#f7f8ff",
+                    "surface-bright": "#393939",
+                    "on-tertiary-fixed": "#001d36",
+                    "surface-dim": "#131313",
+                    "on-error-container": "#ffdad6",
+                    "outline-variant": "#3b4b37",
+                    "on-primary": "#003907",
+                    "inverse-on-surface": "#313030",
+                    "tertiary-fixed": "#d2e4ff",
+                    "primary": "#ebffe2",
+                    "surface": "#131313",
+                    "surface-container": "#20201f",
+                    "on-tertiary": "#003259",
+                    "on-surface-variant": "#b9ccb2",
+                    "on-tertiary-fixed-variant": "#00497e",
+                    "primary-fixed": "#72ff70",
+                    "background": "#131313",
+                    "secondary-container": "#ffdb3c",
+                    "tertiary-fixed-dim": "#9fcaff",
+                    "surface-tint": "#00e639",
+                    "on-tertiary-container": "#0063a8",
+                    "surface-container-low": "#1c1b1b",
+                    "on-secondary-container": "#725f00",
+                    "inverse-surface": "#e5e2e1",
+                    "on-error": "#690005",
+                    "error-container": "#93000a",
+                    "on-primary-container": "#007117",
+                    "secondary-fixed": "#ffe16d",
+                    "secondary-fixed-dim": "#e9c400",
+                    "on-secondary-fixed-variant": "#544600",
+                    "surface-container-highest": "#353535",
+                    "primary-fixed-dim": "#00e639",
+                    "on-secondary": "#3a3000",
+                    "surface-container-high": "#2a2a2a",
+                    "surface-container-lowest": "#0e0e0e",
+                    "on-surface": "#e5e2e1"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "pixel-unit": "4px",
+                    "container-padding": "24px",
+                    "gutter": "16px",
+                    "sidebar-width": "280px"
+            },
+            "fontFamily": {
+                    "code-block": ["JetBrains Mono"],
+                    "body-lg": ["JetBrains Mono"],
+                    "label-sm": ["Courier Prime"],
+                    "headline-lg": ["Space Mono"],
+                    "headline-md": ["Space Mono"],
+                    "body-md": ["JetBrains Mono"]
+            },
+            "fontSize": {
+                    "code-block": ["14px", {"lineHeight": "22px", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "700"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-1px", "fontWeight": "700"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        /* CRT Scanline Effect */
+        .scanlines {
+            position: relative;
+        }
+        .scanlines::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 100;
+            background-size: 100% 4px, 6px 100%;
+            pointer-events: none;
+        }
+        /* Custom Tree Connecting Lines */
+        .tree-line-v { width: 4px; height: 32px; margin: 0 auto; }
+        .tree-line-h { height: 4px; width: 100%; }
+    </style>
+</head>
+<body class="bg-background text-on-background h-screen overflow-hidden flex flex-col md:flex-row font-body-md scanlines">
+<!-- Desktop SideNavBar (Hidden on Mobile) -->
+<nav class="hidden md:flex flex-col p-4 z-40 fixed left-0 top-0 h-full w-sidebar-width bg-surface-container dark:bg-surface-container border-r-4 border-outline-variant flat no shadows">
+<div class="mb-8 flex items-center gap-4">
+<div class="w-12 h-12 bg-surface-bright border-2 border-outline flex items-center justify-center relative overflow-hidden" style="box-shadow: 4px 4px 0px 0px var(--tw-colors-outline);">
+<!-- Avatar Placeholder -->
+<div class="absolute inset-0 bg-[url('https://placehold.co/100x100/1c1b1b/00ff41?text=A')] bg-cover bg-center" data-alt="A retro 16-bit pixel art style portrait of a robotic AI agent, rendered in sharp neon green against a dark obsidian background. The character has glowing visor eyes and intricate mechanical details. The aesthetic is heavily inspired by classic dungeon crawler interface avatars. The lighting is harsh and dramatic, creating a brutalist, high-contrast mood."></div>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md text-primary">ARCHMAGE</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant">LVL 99 AGENT</p>
+</div>
+</div>
+<div class="flex flex-col gap-2 flex-1">
+<!-- Active Tab: Dashboard -->
+<button class="flex items-center gap-3 p-3 bg-secondary-container text-on-secondary-container border-2 border-primary shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-left hover:bg-surface-variant hover:border-2 hover:border-outline hover:translate-x-1 transition-all duration-75">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">swords</span>
+<span class="font-body-md text-body-md font-bold">Dashboard</span>
+</button>
+<button class="flex items-center gap-3 p-3 text-on-surface-variant opacity-80 border-2 border-transparent text-left hover:bg-surface-variant hover:border-2 hover:border-outline hover:translate-x-1 transition-all duration-75">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">menu_book</span>
+<span class="font-body-md text-body-md font-bold">Wiki</span>
+</button>
+<button class="flex items-center gap-3 p-3 text-on-surface-variant opacity-80 border-2 border-transparent text-left hover:bg-surface-variant hover:border-2 hover:border-outline hover:translate-x-1 transition-all duration-75">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+<span class="font-body-md text-body-md font-bold">Settings</span>
+</button>
+</div>
+<button class="mt-auto w-full p-4 bg-primary-container text-on-primary-container font-headline-md text-headline-md text-center border-4 border-primary hover:bg-surface-variant hover:border-2 hover:border-outline hover:translate-x-1 transition-all duration-75 uppercase tracking-wider" style="box-shadow: 4px 4px 0px 0px var(--tw-colors-primary);">
+            CAST SPELL
+        </button>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col h-screen md:ml-sidebar-width relative">
+<!-- TopAppBar (Web & Mobile, adjusting for rules) -->
+<header class="fixed top-0 w-full md:w-[calc(100%-var(--tw-space-sidebar-width))] z-50 flex justify-between items-center px-container-padding h-16 bg-surface dark:bg-surface border-b-4 border-outline-variant dark:border-outline-variant flat no shadows">
+<div class="font-headline-lg text-headline-lg text-primary-container dark:text-primary-fixed uppercase tracking-widest">
+                OPENCODE
+            </div>
+<!-- Navigation Links (Hidden on Mobile) -->
+<nav class="hidden md:flex items-center gap-8 h-full">
+<a class="h-full flex items-center text-on-surface-variant hover:bg-surface-variant hover:text-primary-container font-headline-md text-headline-md px-4 transition-colors" href="#">
+                    Wiki
+                </a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="text-primary dark:text-primary-fixed hover:bg-surface-variant hover:text-primary-container p-2 active:translate-y-1 active:translate-x-1 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+</button>
+</div>
+</header>
+<!-- Canvas Area -->
+<div class="flex-1 mt-16 mb-12 md:mb-0 overflow-y-auto bg-surface p-gutter md:p-container-padding relative">
+<!-- Context Header -->
+<div class="mb-8 border-b-4 border-surface-variant pb-4">
+<h2 class="font-headline-lg text-headline-lg text-on-background uppercase tracking-tight">Agent Status // Skill Tree</h2>
+<p class="font-code-block text-code-block text-primary-fixed mt-2">&gt; SYSTEM_READY: Allocating trait points to node infrastructure...</p>
+</div>
+<!-- Skill Tree Layout Container -->
+<div class="max-w-5xl mx-auto flex flex-col items-center py-12 relative bg-surface-container-low border-4 border-outline-variant" style="box-shadow: inset 0px 0px 20px 0px rgba(0,0,0,0.8);">
+<!-- Root Node (Unlocked) -->
+<div class="relative group cursor-pointer active:translate-y-1 active:translate-x-1 transition-transform">
+<div class="w-48 p-4 bg-surface-bright border-2 border-primary-container flex flex-col items-center justify-center gap-2 relative z-10" style="box-shadow: 4px 4px 0px 0px var(--tw-colors-primary-container);">
+<span class="material-symbols-outlined text-4xl text-primary-container" style="font-variation-settings: 'FILL' 1;">terminal</span>
+<span class="font-body-md text-body-md text-primary-container font-bold text-center">Core Logic</span>
+</div>
+<!-- Tooltip (Parchment Style) -->
+<div class="absolute top-full left-1/2 -translate-x-1/2 mt-4 w-64 bg-secondary border-4 border-secondary-container p-4 hidden group-hover:block z-50 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.9)]">
+<h4 class="font-headline-md text-headline-md text-on-secondary mb-2 border-b border-on-secondary-variant pb-1">Core Logic</h4>
+<div class="font-body-md text-body-md text-on-secondary space-y-2">
+<p><em>The foundational intelligence routine.</em></p>
+<p>Grants basic syntax parsing and decision making capabilities.</p>
+<p class="text-on-secondary-container font-bold pt-2">&gt; STATUS: UNLOCKED</p>
+</div>
+</div>
+</div>
+<!-- Path Down -->
+<div class="tree-line-v bg-primary-container"></div>
+<!-- Horizontal Split Level 1 -->
+<div class="flex items-center w-full max-w-2xl">
+<div class="h-1 bg-primary-container flex-1 mt-[-2px]"></div>
+<div class="w-1 h-1 bg-primary-container"></div>
+<div class="h-1 bg-outline-variant flex-1 mt-[-2px]"></div>
+</div>
+<!-- Level 2 Nodes -->
+<div class="flex justify-between w-full max-w-3xl px-8 mt-[-2px]">
+<!-- Branch L: Unlocked -->
+<div class="flex flex-col items-center">
+<div class="tree-line-v bg-primary-container h-8"></div>
+<div class="relative group cursor-pointer active:translate-y-1 active:translate-x-1 transition-transform">
+<div class="w-48 p-4 bg-surface-bright border-2 border-primary-container flex flex-col items-center justify-center gap-2 relative z-10" style="box-shadow: 4px 4px 0px 0px var(--tw-colors-primary-container);">
+<span class="material-symbols-outlined text-4xl text-primary-container" style="font-variation-settings: 'FILL' 1;">construction</span>
+<span class="font-body-md text-body-md text-primary-container font-bold text-center">Rust Mastery</span>
+</div>
+<!-- Tooltip -->
+<div class="absolute top-full left-1/2 -translate-x-1/2 mt-4 w-64 bg-secondary border-4 border-secondary-container p-4 hidden group-hover:block z-50 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.9)]">
+<h4 class="font-headline-md text-headline-md text-on-secondary mb-2 border-b border-on-secondary-variant pb-1">Rust Mastery</h4>
+<div class="font-body-md text-body-md text-on-secondary space-y-2">
+<p><em>Memory safety without garbage collection.</em></p>
+<ul class="list-disc pl-4 text-xs">
+<li>+50% Execution Speed</li>
+<li>0 Segfaults Guaranteed</li>
+</ul>
+<p class="text-on-secondary-container font-bold pt-2">&gt; STATUS: UNLOCKED</p>
+</div>
+</div>
+</div>
+<!-- Path Down L -->
+<div class="tree-line-v bg-outline-variant mt-4"></div>
+<!-- Level 3 L: Locked -->
+<div class="relative group cursor-pointer active:translate-y-1 active:translate-x-1 transition-transform mt-[-2px]">
+<div class="w-48 p-4 bg-surface-dim border-2 border-outline-variant opacity-60 flex flex-col items-center justify-center gap-2 relative z-10" style="box-shadow: 4px 4px 0px 0px var(--tw-colors-outline-variant);">
+<span class="material-symbols-outlined text-4xl text-on-surface-variant" style="font-variation-settings: 'FILL' 0;">integration_instructions</span>
+<span class="font-body-md text-body-md text-on-surface-variant font-bold text-center">Tauri Integration</span>
+</div>
+<!-- Tooltip -->
+<div class="absolute top-full left-1/2 -translate-x-1/2 mt-4 w-64 bg-surface-container border-4 border-outline p-4 hidden group-hover:block z-50 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+<h4 class="font-headline-md text-headline-md text-on-surface mb-2 border-b border-outline-variant pb-1">Tauri Integration</h4>
+<div class="font-body-md text-body-md text-on-surface-variant space-y-2">
+<p><em>Build smaller, faster, and more secure desktop apps.</em></p>
+<p>Requires: Rust Mastery Lvl 1.</p>
+<p class="text-error font-bold pt-2">&gt; STATUS: LOCKED (Cost: 500 XP)</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Branch R: Locked -->
+<div class="flex flex-col items-center">
+<div class="tree-line-v bg-outline-variant h-8"></div>
+<div class="relative group cursor-pointer active:translate-y-1 active:translate-x-1 transition-transform">
+<div class="w-48 p-4 bg-surface-dim border-2 border-outline-variant opacity-60 flex flex-col items-center justify-center gap-2 relative z-10" style="box-shadow: 4px 4px 0px 0px var(--tw-colors-outline-variant);">
+<span class="material-symbols-outlined text-4xl text-on-surface-variant" style="font-variation-settings: 'FILL' 0;">bug_report</span>
+<span class="font-body-md text-body-md text-on-surface-variant font-bold text-center">Bug Squashing</span>
+</div>
+<!-- Tooltip -->
+<div class="absolute top-full left-1/2 -translate-x-1/2 mt-4 w-64 bg-surface-container border-4 border-outline p-4 hidden group-hover:block z-50 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+<h4 class="font-headline-md text-headline-md text-on-surface mb-2 border-b border-outline-variant pb-1">Bug Squashing</h4>
+<div class="font-body-md text-body-md text-on-surface-variant space-y-2">
+<p><em>Advanced static analysis and automated patching.</em></p>
+<p>Identify and neutralize critical vulnerabilities pre-runtime.</p>
+<p class="text-error font-bold pt-2">&gt; STATUS: LOCKED (Cost: 250 XP)</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Mobile BottomNavBar (Hidden on Desktop) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-12 px-4 border-t-4 border-outline-variant bg-surface-dim bg-surface-container-highest dark:bg-surface-container-highest flat no shadows">
+<div class="flex flex-col items-center text-primary-fixed brightness-125 transition-colors duration-100 hover:text-primary-fixed-dim cursor-pointer">
+<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 1;">favorite</span>
+<span class="font-code-block text-code-block text-[10px]">HP: 100%</span>
+</div>
+<div class="flex flex-col items-center text-on-surface transition-colors duration-100 hover:text-primary-fixed-dim cursor-pointer">
+<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 0;">bolt</span>
+<span class="font-code-block text-code-block text-[10px]">MP: 750</span>
+</div>
+<div class="flex flex-col items-center text-on-surface transition-colors duration-100 hover:text-primary-fixed-dim cursor-pointer">
+<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 0;">grade</span>
+<span class="font-code-block text-code-block text-[10px]">XP: 12.4k</span>
+</div>
+</nav>
+</body></html>
