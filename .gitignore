@@ -1,0 +1,7 @@
+.sisyphus/
+.playwright-mcp/
+node_modules/
+dist/
+build/
+*.log
+*.tmp
