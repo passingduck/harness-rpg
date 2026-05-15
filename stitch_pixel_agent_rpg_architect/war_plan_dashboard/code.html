@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>OPENCODE - War Plan Graph</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&amp;family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&amp;family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-background": "#e5e2e1",
+                    "inverse-primary": "#006e16",
+                    "outline": "#84967e",
+                    "error": "#ffb4ab",
+                    "primary-container": "#00ff41",
+                    "secondary": "#fff9ef",
+                    "on-primary-fixed-variant": "#00530e",
+                    "tertiary-container": "#c7deff",
+                    "on-primary-fixed": "#002203",
+                    "on-secondary-fixed": "#221b00",
+                    "surface-variant": "#353535",
+                    "tertiary": "#f7f8ff",
+                    "surface-bright": "#393939",
+                    "on-tertiary-fixed": "#001d36",
+                    "surface-dim": "#131313",
+                    "on-error-container": "#ffdad6",
+                    "outline-variant": "#3b4b37",
+                    "on-primary": "#003907",
+                    "inverse-on-surface": "#313030",
+                    "tertiary-fixed": "#d2e4ff",
+                    "primary": "#ebffe2",
+                    "surface": "#131313",
+                    "surface-container": "#20201f",
+                    "on-tertiary": "#003259",
+                    "on-surface-variant": "#b9ccb2",
+                    "on-tertiary-fixed-variant": "#00497e",
+                    "primary-fixed": "#72ff70",
+                    "background": "#131313",
+                    "secondary-container": "#ffdb3c",
+                    "tertiary-fixed-dim": "#9fcaff",
+                    "surface-tint": "#00e639",
+                    "on-tertiary-container": "#0063a8",
+                    "surface-container-low": "#1c1b1b",
+                    "on-secondary-container": "#725f00",
+                    "inverse-surface": "#e5e2e1",
+                    "on-error": "#690005",
+                    "error-container": "#93000a",
+                    "on-primary-container": "#007117",
+                    "secondary-fixed": "#ffe16d",
+                    "secondary-fixed-dim": "#e9c400",
+                    "on-secondary-fixed-variant": "#544600",
+                    "surface-container-highest": "#353535",
+                    "primary-fixed-dim": "#00e639",
+                    "on-secondary": "#3a3000",
+                    "surface-container-high": "#2a2a2a",
+                    "surface-container-lowest": "#0e0e0e",
+                    "on-surface": "#e5e2e1"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "pixel-unit": "4px",
+                    "container-padding": "24px",
+                    "gutter": "16px",
+                    "sidebar-width": "280px"
+            },
+            "fontFamily": {
+                    "code-block": [
+                            "JetBrains Mono"
+                    ],
+                    "body-lg": [
+                            "JetBrains Mono"
+                    ],
+                    "label-sm": [
+                            "Courier Prime"
+                    ],
+                    "headline-lg": [
+                            "Space Mono"
+                    ],
+                    "headline-md": [
+                            "Space Mono"
+                    ],
+                    "body-md": [
+                            "JetBrains Mono"
+                    ]
+            },
+            "fontSize": {
+                    "code-block": [
+                            "14px",
+                            {
+                                    "lineHeight": "22px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "label-sm": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "letterSpacing": "-1px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "headline-md": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "body-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ]
+            }
+        },
+        },
+      }
+    </script>
+<style>
+        /* Pixel Art / Retro Aesthetics Utilities */
+        .pixel-border {
+            border: 4px solid #4a4a4a;
+            border-top-color: #84967e;
+            border-left-color: #84967e;
+            border-bottom-color: #3b4b37;
+            border-right-color: #3b4b37;
+        }
+        
+        .pixel-border-gold {
+            border: 4px solid #ffe16d;
+            border-top-color: #fff9ef;
+            border-left-color: #fff9ef;
+            border-bottom-color: #e9c400;
+            border-right-color: #e9c400;
+        }
+        
+        .pixel-border-active {
+            border: 4px solid #00ff41;
+            border-top-color: #72ff70;
+            border-left-color: #72ff70;
+            border-bottom-color: #00530e;
+            border-right-color: #00530e;
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+        }
+
+        .crt-scanline {
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%,
+                rgba(0, 0, 0, 0.25) 50%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+        }
+
+        .pixel-line-horizontal {
+            background-image: linear-gradient(to right, #4a4a4a 50%, transparent 50%);
+            background-size: 8px 4px;
+            background-repeat: repeat-x;
+            height: 4px;
+        }
+        
+        .pixel-line-vertical {
+            background-image: linear-gradient(to bottom, #4a4a4a 50%, transparent 50%);
+            background-size: 4px 8px;
+            background-repeat: repeat-y;
+            width: 4px;
+        }
+        
+        .pixel-line-active {
+             background-image: linear-gradient(to right, #00ff41 50%, transparent 50%);
+             background-size: 8px 4px;
+             background-repeat: repeat-x;
+             height: 4px;
+             box-shadow: 0 0 5px rgba(0, 255, 65, 0.3);
+        }
+
+        .crt-text-glow {
+            text-shadow: 0 0 5px rgba(0, 255, 65, 0.7);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col relative overflow-hidden">
+<!-- CRT Overlay -->
+<div class="absolute inset-0 z-50 crt-scanline"></div>
+<!-- TopAppBar (Hidden md:flex) -->
+<nav class="hidden md:flex fixed top-0 w-full z-40 justify-between items-center px-container-padding h-16 bg-surface border-b-4 border-outline-variant dark:border-outline-variant">
+<div class="flex items-center gap-4">
+<span class="font-headline-lg text-headline-lg text-primary-container dark:text-primary-fixed uppercase tracking-widest crt-text-glow">OPENCODE</span>
+</div>
+<div class="flex items-center gap-6 h-full">
+<a class="h-full flex items-center px-4 text-on-surface-variant hover:bg-surface-variant hover:text-primary-container active:translate-y-1 active:translate-x-1 transition-transform" href="#">
+<span class="font-headline-md text-headline-md">Wiki</span>
+</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-primary hover:bg-surface-variant hover:text-primary-container active:translate-y-1 active:translate-x-1 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+</button>
+</div>
+</nav>
+<!-- SideNavBar (Hidden md:flex) -->
+<aside class="hidden md:flex fixed left-0 top-0 h-full w-sidebar-width flex-col p-4 z-30 bg-surface-container dark:bg-surface-container border-r-4 border-outline-variant pt-24">
+<div class="flex items-center gap-4 mb-8 pixel-border p-2 bg-surface">
+<img alt="Retro pixel art avatar of an archmage character" class="w-12 h-12 border-2 border-outline pixel-border" data-alt="A stylized retro 16-bit pixel art portrait of a high-level archmage or digital avatar. The character wears dark, hooded cyber-robes with glowing green arcane symbols. The background is a stark, terminal-black. The image strictly adheres to a limited, brutalist color palette focusing on deep blacks, sharp neon greens, and muted greys, fitting a vintage dungeon crawler aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRp_hZj0pkMwofaAhnktReSBDXkr1hHD0L090iG-JXPmmW8Xiy2AWJQ9xgxOEiyBdBkg_TNZUM84kTrkiQNO3eZMXq2_1snLQet9JVC7CMJeBM3MyyZp0Xukc-ruYynGt_EPmJMwQTGmkzN3SowDRpqVYwAUo1L5byNVBwmf5N_V8zkUbCqibKySWLnTUrpDuO500Znvc7gcWKAJaF-KB-9-nDysuay4ZY_HYccYhsBysHtWqWgpeDChM3lxDylTVUdTL3sRN2c3OG"/>
+<div>
+<h2 class="font-headline-md text-headline-md text-primary crt-text-glow">ARCHMAGE</h2>
+<p class="font-label-sm text-label-sm text-primary-fixed">LVL 99 AGENT</p>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-2">
+<a class="flex items-center gap-3 p-3 bg-secondary-container text-on-secondary-container border-2 border-primary shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-1 transition-all duration-75" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">swords</span>
+<span class="font-body-md text-body-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 p-3 text-on-surface-variant opacity-80 hover:bg-surface-variant hover:border-2 hover:border-outline hover:translate-x-1 transition-all duration-75 border-2 border-transparent" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">menu_book</span>
+<span class="font-body-md text-body-md">Wiki</span>
+</a>
+<a class="flex items-center gap-3 p-3 text-on-surface-variant opacity-80 hover:bg-surface-variant hover:border-2 hover:border-outline hover:translate-x-1 transition-all duration-75 border-2 border-transparent" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</a>
+</nav>
+<button class="mt-auto w-full p-4 pixel-border-gold bg-secondary-container text-on-secondary-container font-headline-md text-headline-md active:translate-y-1 active:translate-x-1 transition-transform flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
+            CAST SPELL
+        </button>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 w-full md:pl-sidebar-width md:pt-16 pb-16 md:pb-0 flex flex-col">
+<!-- Graph Area -->
+<div class="flex-1 relative overflow-auto p-8 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PG1hdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSA0MCAwIEwgMCAwIDAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzJiMmIyYiIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')]">
+<!-- Floating Action Panel -->
+<div class="fixed top-20 right-8 z-20 pixel-border bg-surface-container p-4 w-64">
+<h3 class="font-headline-md text-headline-md text-secondary-fixed mb-4 border-b-2 border-outline-variant pb-2">WAR PLAN</h3>
+<div class="space-y-4">
+<div class="flex justify-between items-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Status</span>
+<span class="font-code-block text-code-block text-primary-fixed crt-text-glow">READY</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Agents</span>
+<span class="font-code-block text-code-block text-tertiary-fixed">3 Active</span>
+</div>
+<button class="w-full mt-4 p-3 pixel-border-active bg-surface-dim text-primary-fixed font-headline-md text-headline-md active:translate-y-1 active:translate-x-1 transition-transform flex items-center justify-center gap-2 group hover:bg-primary-fixed hover:text-surface-dim">
+<span class="material-symbols-outlined group-hover:text-surface-dim" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+                        SESSION START
+                    </button>
+</div>
+</div>
+<!-- Diablo Style Graph Canvas -->
+<div class="relative w-[1200px] h-[800px] mx-auto mt-12">
+<!-- Node: Start (Active) -->
+<div class="absolute top-[350px] left-[50px] flex flex-col items-center gap-2 z-10">
+<div class="w-24 h-24 rounded-full pixel-border-active bg-surface-dim flex items-center justify-center relative shadow-[0_0_20px_rgba(0,255,65,0.4)]">
+<span class="material-symbols-outlined text-4xl text-primary-fixed crt-text-glow" style="font-variation-settings: 'FILL' 1;">flag</span>
+<div class="absolute -bottom-2 -right-2 bg-secondary-container text-on-secondary-container text-[10px] px-1 border-2 border-outline font-label-sm">LVL 1</div>
+</div>
+<span class="font-code-block text-code-block text-primary-fixed bg-surface-dim px-2 pixel-border">INIT</span>
+</div>
+<!-- Active Connection Line -->
+<div class="absolute top-[398px] left-[146px] w-[154px] pixel-line-active"></div>
+<!-- Node: Requirement Spec -->
+<div class="absolute top-[350px] left-[300px] flex flex-col items-center gap-2 z-10">
+<div class="w-24 h-24 rounded-full pixel-border bg-surface-dim flex items-center justify-center relative hover:pixel-border-gold transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-4xl text-secondary-fixed" style="font-variation-settings: 'FILL' 0;">description</span>
+<img alt="Pixel art avatar of a scribe agent" class="absolute -top-4 -right-4 w-10 h-10 border-2 border-outline pixel-border bg-surface" data-alt="A small 16-bit pixel art portrait of a digital scribe or archivist agent. The character wears dusty grey robes and holds a glowing quill. The image strictly uses the retro brutalist color palette with deep blacks, muted greys, and pale yellow accents. The background is terminal black." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBuzKxs43qgFLt99jKI4PYsWRmF8kzQdgQDRQV5uAKowWyItkINQr-qBAdjXM7VxoajUdRUfy51ycjMXkqm3aToxXce8wUHJQ9sU1WvbA7fqPPQsPd0zlvJYCkWoQthBL1tWPVgL0XERP_IK5Wn_VaQr-MvtNFxTmc8YyeAJ5pgRM_iLBsDh9FUe7y4vpnnHS3uwZe7uCoJ7VHunGQKQTpgcXHr5dPp9krrZgFYbUPgj8HwXmNqTMLAtMnBgV6OxWxJEakrnmPhpwq3"/>
+</div>
+<span class="font-code-block text-code-block text-on-surface bg-surface-dim px-2 pixel-border">Requirement Spec</span>
+</div>
+<!-- Path Forks -->
+<div class="absolute top-[398px] left-[396px] w-[50px] pixel-line-horizontal"></div>
+<div class="absolute top-[250px] left-[446px] h-[300px] pixel-line-vertical"></div>
+<div class="absolute top-[250px] left-[446px] w-[100px] pixel-line-horizontal"></div>
+<div class="absolute top-[546px] left-[446px] w-[100px] pixel-line-horizontal"></div>
+<!-- Node: Architecture (Top Branch) -->
+<div class="absolute top-[202px] left-[546px] flex flex-col items-center gap-2 z-10">
+<div class="w-24 h-24 rounded-full pixel-border bg-surface-dim flex items-center justify-center relative hover:pixel-border-gold transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-4xl text-tertiary-fixed" style="font-variation-settings: 'FILL' 0;">account_tree</span>
+<img alt="Pixel art avatar of an architect agent" class="absolute -top-4 -right-4 w-10 h-10 border-2 border-outline pixel-border bg-surface" data-alt="A small 16-bit pixel art portrait of an architect or builder AI agent. The character appears robust, wearing bulky geometric armor in dark cyber-tones. The image uses a brutalist color palette with deep blacks, muted greys, and icy blue accents. The background is a stark, terminal-black void." src="https://lh3.googleusercontent.com/aida-public/AB6AXuArXV1Xai7ZgUoky0X0Ti2M-XfCnwWI8Ris5vgQnKRLC7CTuPMNDm8povPd8CuAi-_bOOh3RvwzbpUZWniggDUraDGHcGz2ygzbCrs_8_8CX7G4X5__zMQyqfDfS1kI8wghxF5rD904Odn3FnoZmi5XEoolmOAajvElKqNsB_O6xyhO5ZyH-_xvb7_wrs0P6oOiK8NY2XmNkxOqqisLv3QHIvhuPzzDY3QJp4JOr7Q2_2IxUxkcg7JwspJKbvtuGG6jgQZQED8LQ-_k"/>
+</div>
+<span class="font-code-block text-code-block text-on-surface bg-surface-dim px-2 pixel-border">Architecture</span>
+</div>
+<!-- Node: Code Generation (Bottom Branch) -->
+<div class="absolute top-[498px] left-[546px] flex flex-col items-center gap-2 z-10">
+<div class="w-24 h-24 rounded-full pixel-border bg-surface-dim flex items-center justify-center relative hover:pixel-border-gold transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-4xl text-error" style="font-variation-settings: 'FILL' 0;">terminal</span>
+<img alt="Pixel art avatar of a coder agent" class="absolute -top-4 -right-4 w-10 h-10 border-2 border-outline pixel-border bg-surface" data-alt="A small 16-bit pixel art portrait of a rogue-like coder agent. The character wears a dark cowl, its face obscured by a glowing neon green visor. The image uses a retro brutalist color palette with deep blacks, muted greys, and intense green accents. The background is a classic terminal-black." src="https://lh3.googleusercontent.com/aida-public/AB6AXuABaj4orVM-zEJGH8WerqZXxGirsjA_jhjuw2X29N6QiU1eja04bH6RfULqm50BHOb7qSkjzk7JVoQyckVvZLxNwurR2gg6zoYK60Ha7BmusJ5JSxhw1gMUbZqRwMVGF90mqLKeh9v0oTWhr1WBgidMg_Zsas5_Jdb0DppijNE10JQgSrF5VjtjExIeA_zJ_1oX91PKVQm2cD0clqGh_wCAGyND5qvBf4DidXItn4Grd4xKy9J80NROH8BB97UkxeACBqhesyTEieV1"/>
+</div>
+<span class="font-code-block text-code-block text-on-surface bg-surface-dim px-2 pixel-border">Code Gen</span>
+</div>
+<!-- Path Convergence -->
+<div class="absolute top-[250px] left-[642px] w-[100px] pixel-line-horizontal"></div>
+<div class="absolute top-[546px] left-[642px] w-[100px] pixel-line-horizontal"></div>
+<div class="absolute top-[250px] left-[742px] h-[300px] pixel-line-vertical"></div>
+<div class="absolute top-[398px] left-[742px] w-[50px] pixel-line-horizontal"></div>
+<!-- Node: Test Execution -->
+<div class="absolute top-[350px] left-[792px] flex flex-col items-center gap-2 z-10">
+<div class="w-24 h-24 rounded-full pixel-border bg-surface-dim flex items-center justify-center relative hover:pixel-border-gold transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-4xl text-primary" style="font-variation-settings: 'FILL' 0;">bug_report</span>
+</div>
+<span class="font-code-block text-code-block text-on-surface bg-surface-dim px-2 pixel-border">Test Execution</span>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Hidden md) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-12 px-4 border-t-4 border-outline-variant bg-surface-dim">
+<div class="flex flex-col items-center justify-center text-on-surface hover:text-primary-fixed-dim transition-colors duration-100 cursor-pointer">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">favorite</span>
+<span class="font-code-block text-[10px] uppercase">HP: 100%</span>
+</div>
+<div class="flex flex-col items-center justify-center text-primary-fixed brightness-125 transition-colors duration-100 cursor-pointer">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">bolt</span>
+<span class="font-code-block text-[10px] uppercase">MP: 750</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface hover:text-primary-fixed-dim transition-colors duration-100 cursor-pointer">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">grade</span>
+<span class="font-code-block text-[10px] uppercase">XP: 12.4k</span>
+</div>
+</nav>
+</body></html>
