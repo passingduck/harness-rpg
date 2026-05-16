@@ -4,6 +4,15 @@ Retro pixel RPG prototype for an OpenCode-powered AI agent development workbench
 
 ![Harness RPG home screen](docs/home.png)
 
+## Product rationale
+
+Harness RPG is built around two ideas:
+
+1. Make logs, plans, specs, diffs, skill usage, and progress human-friendly through a Rust Tauri desktop shell and rich web UI.
+2. Represent jobs as graphs so each node can have its own agent, skills, logs, artifacts, and result.
+
+See `docs/harness-rpg-product-spec.md` for the full product spec.
+
 ## Run
 
 ```bash

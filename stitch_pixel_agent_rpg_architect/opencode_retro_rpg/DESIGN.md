@@ -92,6 +92,14 @@ This design system fuses the nostalgic aesthetics of 16-bit dungeon crawlers and
 
 The style is **Retro-Modern Brutalism**, utilizing pixel-perfect accuracy, heavy beveled borders, and CRT-inspired visual effects. It balances the grit of a dark dungeon with the high-tech glow of a terminal. Every interaction should feel tactile and "clicky," reminiscent of a cartridge-era inventory screen.
 
+## Product Rationale
+Harness RPG is designed to solve two product problems before it solves visual novelty.
+
+1. **Human-friendly review of agent work:** Logs, plans, specs, diffs, skill usage, and progress must be understandable at a glance. Rust Tauri provides native local-project access, while the web UI should use rich layout, markdown, graph interaction, and inspector panels to turn raw agent output into a readable review surface.
+2. **Graph-shaped job execution:** Jobs should be represented as graphs, with each node owning its assigned agent, required skills, status, logs, artifacts, and result. This keeps responsibilities and outputs separated so users can see exactly which agent did which step and what each node produced.
+
+The RPG metaphor should reinforce these two goals: quests are graph nodes, party members are agents, skills are explicit capabilities, and rewards/XP reveal which agents are used most often. The game layer must clarify the work rather than hide it.
+
 ## Colors
 The palette is rooted in a "Dark Dungeon" atmosphere, ensuring high contrast for code readability while maintaining the RPG theme.
 
