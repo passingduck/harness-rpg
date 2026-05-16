@@ -5,6 +5,9 @@ const required = [
   'app/styles.css',
   'app/app.js',
   'app/app-model.mjs',
+  'scripts/dev-server.mjs',
+  'src-tauri/Cargo.toml',
+  'src-tauri/src/lib.rs',
 ];
 
 for (const file of required) {
