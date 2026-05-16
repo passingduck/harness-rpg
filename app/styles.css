@@ -71,6 +71,8 @@ button.secondary { background: var(--panel-bright); color: var(--green); border-
 .bar { height: 8px; background: #0e0e0e; border: 1px solid var(--line-dark); margin-top: .3rem; }
 .bar span { display: block; height: 100%; background: var(--green); }
 .bar.xp span { background: var(--gold); }
+.bar.quest { height: 14px; border: 2px solid var(--line-dark); box-shadow: inset 0 0 10px rgba(0,0,0,.8); }
+.bar.quest span { background: linear-gradient(90deg, var(--green), var(--gold)); box-shadow: 0 0 14px rgba(0,255,65,.75); }
 .xp-line { margin-top: .5rem; color: var(--gold); font-size: .8rem; }
 
 .project-path { color: var(--green); word-break: break-all; }
@@ -81,6 +83,10 @@ button.secondary { background: var(--panel-bright); color: var(--green); border-
 .skill-node.selected strong { color: var(--gold); }
 
 .graph { position: relative; height: 360px; background: linear-gradient(135deg, rgba(0,255,65,.05), transparent 45%), #0e0e0e; overflow: hidden; }
+.quest-progress { display: grid; gap: .45rem; border: 3px solid var(--line-dark); background: rgba(14,14,14,.88); padding: .65rem; margin: .8rem 0 1rem; }
+.quest-progress div:first-child { display: flex; justify-content: space-between; gap: 1rem; color: var(--muted); }
+.quest-progress strong { color: var(--green); text-transform: uppercase; }
+.quest-progress span { color: var(--gold); }
 .edge { position: absolute; height: 4px; background: repeating-linear-gradient(90deg, var(--line-dark), var(--line-dark) 8px, transparent 8px, transparent 14px); transform-origin: left center; }
 .node { position: absolute; min-width: 130px; border: 4px solid var(--line-dark); background: var(--panel); padding: .65rem; text-align: center; box-shadow: 4px 4px 0 #000; }
 .node.ready { border-color: var(--blue); }
@@ -98,6 +104,14 @@ input { width: 100%; margin-top: .35rem; background: #0e0e0e; color: var(--green
 .artifact { color: var(--blue); }
 .feedback-list { margin: 0; padding-left: 1.1rem; color: var(--muted); }
 .feedback-list li { margin-bottom: .6rem; }
+.review-title { margin-top: 1.25rem; }
+.review-center { border: 3px solid var(--line-dark); background: linear-gradient(135deg, rgba(0,255,65,.08), transparent 55%), #0e0e0e; padding: .65rem; margin-bottom: 1rem; }
+.review-summary { display: grid; gap: .35rem; border: 2px solid var(--green); color: var(--green); padding: .65rem; margin-bottom: .65rem; box-shadow: inset 0 0 16px rgba(0,255,65,.12); }
+.review-summary strong { color: var(--gold); text-transform: uppercase; }
+.review-grid { display: grid; gap: .55rem; }
+.review-card { border-left: 4px solid var(--gold); background: rgba(32,32,31,.9); padding: .55rem .65rem; }
+.review-card h4 { color: var(--gold); margin: 0 0 .35rem; text-transform: uppercase; }
+.review-card p { color: var(--muted); margin: 0; line-height: 1.45; }
 .sessions li { display: flex; justify-content: space-between; gap: .5rem; padding: .5rem 0; border-bottom: 1px solid var(--line-dark); }
 .wiki-map { position: relative; height: 240px; background: #0e0e0e; border: 4px solid var(--line-dark); }
 .wiki-pin { position: absolute; translate: -50% -50%; border: 3px solid var(--line); background: var(--panel); padding: .35rem; font-size: .75rem; color: var(--muted); }

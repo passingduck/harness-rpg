@@ -7,6 +7,7 @@ import {
   setLocale,
   selectAgent,
   selectNode,
+  getGraphProgress,
   startTutorialSession,
   approveDestructiveNode,
   createSession,
@@ -22,12 +23,14 @@ const copy = {
     project: '프로젝트', openProject: '프로젝트 열기', stateDir: '상태 디렉터리',
     agentParty: '에이전트 파티', sessions: '세션', newSession: '새 세션', fork: '포크',
     warPlan: '전쟁 계획 튜토리얼', sessionStart: '세션 시작', approve: '파괴 명령 승인',
+    overallProgress: '전체 진행률', clearedNodes: '클리어 노드',
     flow: '흐름: 프로젝트 열기 → 에이전트/스킬 세팅 → Start → wiki-maker agent의 wiki-make → 파괴 명령 승인 게이트.',
     skillTree: 'OpenCode 스킬 트리', selectedAgent: '선택된 에이전트',
     skillHelp: '기존 OpenCode markdown 스킬은 영어 원문을 유지하고, UI만 번역합니다.',
     wikiMap: 'LLM Wiki 월드맵', wikiHelp: 'llm_wiki 개념을 host-agent skill로 포팅: ingest, query, lint, graph, gap detection, deep research, review actions, wikilink enrichment.',
     agentEditor: 'Agent.md 편집기', profileEditor: '프로필 편집', agentName: '에이전트 이름', profileImage: '프로필 이미지 URL', feedback: '앱 피드백',
     nodeDetail: '노드 상세', status: '상태', agent: '에이전트', usedSkills: '사용 스킬', friendlyLog: '친화 로그', rawLog: '원본 로그', whyUsed: '사용 이유', artifacts: '산출물',
+    reviewCenter: '리뷰 센터', reviewSummary: '요약', reviewPlan: '계획', reviewSpec: '스펙', reviewLog: '로그', reviewDiff: '변경점', reviewResult: '결과',
     level: '레벨', xp: '경험치', language: 'English UI', markdownNote: 'Agent가 읽는 markdown은 영어로 유지됩니다.',
   },
   en: {
@@ -35,12 +38,14 @@ const copy = {
     project: 'Project', openProject: 'Open Project', stateDir: 'State dir',
     agentParty: 'Agent Party', sessions: 'Sessions', newSession: 'New Session', fork: 'Fork',
     warPlan: 'War Plan Tutorial', sessionStart: 'Session Start', approve: 'Approve Destructive Command',
+    overallProgress: 'Overall Progress', clearedNodes: 'Cleared Nodes',
     flow: 'Flow: project open → agent/skill setup → Start → wiki-make by wiki-maker agent → approval-gated destructive command.',
     skillTree: 'OpenCode Skill Tree', selectedAgent: 'Selected agent',
     skillHelp: 'Existing OpenCode markdown skills stay in English; only the human UI is localized.',
     wikiMap: 'LLM Wiki World Map', wikiHelp: 'llm_wiki concepts ported as host-agent skills: ingest, query, lint, graph, gap detection, deep research, review actions, wikilink enrichment.',
     agentEditor: 'Agent.md Editor', profileEditor: 'Profile Editor', agentName: 'Agent name', profileImage: 'Profile image URL', feedback: 'App Feedback',
     nodeDetail: 'Node Detail', status: 'Status', agent: 'Agent', usedSkills: 'Used skills', friendlyLog: 'Friendly Log', rawLog: 'Raw Log', whyUsed: 'Why Used', artifacts: 'Artifacts',
+    reviewCenter: 'Review Center', reviewSummary: 'Summary', reviewPlan: 'Plan', reviewSpec: 'Spec', reviewLog: 'Log', reviewDiff: 'Diff', reviewResult: 'Result',
     level: 'Level', xp: 'XP', language: '한국어 UI', markdownNote: 'Markdown read by agents remains English.',
   },
 };
@@ -133,6 +138,19 @@ function renderGraph() {
   }).join('')}`;
 }
 
+function renderGraphProgress() {
+  const progress = getGraphProgress(state);
+  return `
+    <div class="quest-progress" aria-label="${t('overallProgress')}">
+      <div>
+        <strong>${t('overallProgress')}</strong>
+        <span>${progress.percent}% · ${t('clearedNodes')} ${progress.completed}/${progress.total}</span>
+      </div>
+      <div class="bar quest"><span style="width:${progress.percent}%"></span></div>
+    </div>
+  `;
+}
+
 function renderSessions() {
   return state.sessions.map((session) => `
     <li>
@@ -146,6 +164,31 @@ function renderWikiMap() {
   return state.wikiMap.map((pin) => `
     <div class="wiki-pin ${pin.kind}" style="left:${pin.x}%;top:${pin.y}%">${pin.label}</div>
   `).join('');
+}
+
+function renderReviewCenter(node) {
+  const review = node.review ?? {};
+  const rows = [
+    ['reviewPlan', review.plan],
+    ['reviewSpec', review.spec],
+    ['reviewLog', review.log],
+    ['reviewDiff', review.diff],
+    ['reviewResult', review.result],
+  ];
+
+  return `
+    <div class="review-center" aria-label="${t('reviewCenter')}">
+      ${review.summary ? `<div class="review-summary"><strong>${t('reviewSummary')}</strong><span>${review.summary}</span></div>` : ''}
+      <div class="review-grid">
+        ${rows.map(([labelKey, value]) => `
+          <article class="review-card">
+            <h4>${t(labelKey)}</h4>
+            <p>${value ?? ''}</p>
+          </article>
+        `).join('')}
+      </div>
+    </div>
+  `;
 }
 
 function render() {
@@ -180,6 +223,7 @@ function render() {
         <section class="pixel-panel">
           <h2 class="section-title">${t('warPlan')}</h2>
           <p class="muted">${t('flow')}</p>
+          ${renderGraphProgress()}
           <button id="start-session">${t('sessionStart')}</button>
           ${node.status === 'approval_required' ? `<button id="approve-node" class="secondary">${t('approve')}</button>` : ''}
           <div class="graph" aria-label="Diablo-style war plan graph">${renderGraph()}</div>
@@ -213,6 +257,8 @@ function render() {
           <p><strong>${t('status')}:</strong> ${statusLabel(node.status)}</p>
           <p><strong>${t('agent')}:</strong> ${node.agentId}</p>
           <p><strong>${t('usedSkills')}:</strong> ${node.skills.join(', ') || 'none'}</p>
+          <h2 class="section-title review-title">${t('reviewCenter')}</h2>
+          ${renderReviewCenter(node)}
           <h4>${t('friendlyLog')}</h4>
           <div class="log-box">${node.logs.friendly}</div>
           <h4>${t('rawLog')}</h4>
