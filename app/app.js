@@ -10,6 +10,8 @@ import {
   getGraphProgress,
   startTutorialSession,
   approveDestructiveNode,
+  addWarPlanNode,
+  removeWarPlanNode,
   createSession,
   forkSession,
   exportWorkspaceFiles,
@@ -27,6 +29,7 @@ const copy = {
     exportWorkspace: '파일로 저장', exportReady: '저장 준비됨', exportDone: '파일 저장 완료', exportFailed: '파일 저장 실패',
     agentParty: '에이전트 파티', sessions: '세션', newSession: '새 세션', fork: '포크',
     warPlan: '전쟁 계획 튜토리얼', sessionStart: '세션 시작', approve: '파괴 명령 승인',
+    addNode: '노드 추가', removeNode: '선택 노드 제거',
     overallProgress: '전체 진행률', clearedNodes: '클리어 노드',
     flow: '흐름: 프로젝트 열기 → 에이전트/스킬 세팅 → Start → wiki-maker agent의 wiki-make → 파괴 명령 승인 게이트.',
     skillTree: 'OpenCode 스킬 트리', selectedAgent: '선택된 에이전트',
@@ -44,6 +47,7 @@ const copy = {
     exportWorkspace: 'Save to Files', exportReady: 'Ready to save', exportDone: 'Files saved', exportFailed: 'File save failed',
     agentParty: 'Agent Party', sessions: 'Sessions', newSession: 'New Session', fork: 'Fork',
     warPlan: 'War Plan Tutorial', sessionStart: 'Session Start', approve: 'Approve Destructive Command',
+    addNode: 'Add Node', removeNode: 'Remove Selected Node',
     overallProgress: 'Overall Progress', clearedNodes: 'Cleared Nodes',
     flow: 'Flow: project open → agent/skill setup → Start → wiki-make by wiki-maker agent → approval-gated destructive command.',
     skillTree: 'OpenCode Skill Tree', selectedAgent: 'Selected agent',
@@ -114,13 +118,16 @@ function renderSkills(agent) {
 }
 
 function nodePosition(id) {
-  return {
+  const fixed = {
     start: [4, 140],
     'wiki-make': [190, 70],
     'skill-attune': [380, 190],
     'destructive-check': [575, 82],
     'session-plan': [760, 190],
-  }[id] ?? [20, 20];
+  }[id];
+  if (fixed) return fixed;
+  const dynamicIndex = state.graph.nodes.findIndex((node) => node.id === id);
+  return [950 + Math.max(dynamicIndex - 5, 0) * 170, dynamicIndex % 2 === 0 ? 80 : 210];
 }
 
 function renderEdges() {
@@ -269,8 +276,12 @@ function render() {
           <h2 class="section-title">${t('warPlan')}</h2>
           <p class="muted">${t('flow')}</p>
           ${renderGraphProgress()}
-          <button id="start-session">${t('sessionStart')}</button>
-          ${node.status === 'approval_required' ? `<button id="approve-node" class="secondary">${t('approve')}</button>` : ''}
+          <div class="graph-actions">
+            <button id="start-session">${t('sessionStart')}</button>
+            <button id="add-node" class="secondary">${t('addNode')}</button>
+            <button id="remove-node" class="secondary">${t('removeNode')}</button>
+            ${node.status === 'approval_required' ? `<button id="approve-node" class="secondary">${t('approve')}</button>` : ''}
+          </div>
           <div class="graph" aria-label="Diablo-style war plan graph">${renderGraph()}</div>
         </section>
         <section class="pixel-panel">
@@ -325,6 +336,8 @@ function bindEvents() {
   document.querySelector('#open-project')?.addEventListener('click', () => save({ ...state, project: { ...state.project, opened: true } }));
   document.querySelector('#export-workspace')?.addEventListener('click', exportWorkspaceToFiles);
   document.querySelector('#start-session')?.addEventListener('click', () => save(startTutorialSession(state)));
+  document.querySelector('#add-node')?.addEventListener('click', () => save(addWarPlanNode(state)));
+  document.querySelector('#remove-node')?.addEventListener('click', () => save(removeWarPlanNode(state, state.selectedNodeId)));
   document.querySelector('#approve-node')?.addEventListener('click', () => save(approveDestructiveNode(state, 'destructive-check')));
   document.querySelector('#new-session')?.addEventListener('click', () => save(createSession(state)));
   document.querySelector('#agent-name')?.addEventListener('input', (event) => updateDraft(updateAgentProfile(state, state.activeAgentId, { name: event.target.value })));
