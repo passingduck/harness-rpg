@@ -17,12 +17,14 @@ import {
 
 const STORAGE_KEY = 'harness-rpg-state-v1';
 let state = deserializeState(localStorage.getItem(STORAGE_KEY));
+let exportStatus = '';
 
 const copy = {
   ko: {
     tagline: 'OpenCode MCP/API 브릿지 · 로컬 우선 에이전트 작업대',
     project: '프로젝트', openProject: '프로젝트 열기', stateDir: '상태 디렉터리',
     localBackend: '로컬 백엔드', database: 'SQLite DB', fileState: '파일 상태', bridgeMode: '브릿지', exportedFiles: '파일-backed export', bridgeEvents: '브릿지 이벤트',
+    exportWorkspace: '파일로 저장', exportReady: '저장 준비됨', exportDone: '파일 저장 완료', exportFailed: '파일 저장 실패',
     agentParty: '에이전트 파티', sessions: '세션', newSession: '새 세션', fork: '포크',
     warPlan: '전쟁 계획 튜토리얼', sessionStart: '세션 시작', approve: '파괴 명령 승인',
     overallProgress: '전체 진행률', clearedNodes: '클리어 노드',
@@ -39,6 +41,7 @@ const copy = {
     tagline: 'OpenCode MCP/API bridge · local-first agent workbench',
     project: 'Project', openProject: 'Open Project', stateDir: 'State dir',
     localBackend: 'Local Backend', database: 'SQLite DB', fileState: 'File State', bridgeMode: 'Bridge', exportedFiles: 'File-backed Export', bridgeEvents: 'Bridge Events',
+    exportWorkspace: 'Save to Files', exportReady: 'Ready to save', exportDone: 'Files saved', exportFailed: 'File save failed',
     agentParty: 'Agent Party', sessions: 'Sessions', newSession: 'New Session', fork: 'Fork',
     warPlan: 'War Plan Tutorial', sessionStart: 'Session Start', approve: 'Approve Destructive Command',
     overallProgress: 'Overall Progress', clearedNodes: 'Cleared Nodes',
@@ -59,8 +62,17 @@ function t(key) {
 
 function save(next) {
   state = next;
-  localStorage.setItem(STORAGE_KEY, serializeState(state));
+  persistState();
   render();
+}
+
+function updateDraft(next) {
+  state = next;
+  persistState();
+}
+
+function persistState() {
+  localStorage.setItem(STORAGE_KEY, serializeState(state));
 }
 
 function activeAgent() {
@@ -207,6 +219,8 @@ function renderBackendPanel() {
       </dl>
       <h3>${t('exportedFiles')}</h3>
       <ul class="file-list">${fileNames.map((file) => `<li>${file}</li>`).join('')}</ul>
+      <button id="export-workspace" class="secondary">${t('exportWorkspace')}</button>
+      <p class="export-status">${exportStatus || t('exportReady')}</p>
     </section>
   `;
 }
@@ -309,16 +323,33 @@ function render() {
 function bindEvents() {
   document.querySelector('#toggle-locale')?.addEventListener('click', () => save(setLocale(state, state.locale === 'ko' ? 'en' : 'ko')));
   document.querySelector('#open-project')?.addEventListener('click', () => save({ ...state, project: { ...state.project, opened: true } }));
+  document.querySelector('#export-workspace')?.addEventListener('click', exportWorkspaceToFiles);
   document.querySelector('#start-session')?.addEventListener('click', () => save(startTutorialSession(state)));
   document.querySelector('#approve-node')?.addEventListener('click', () => save(approveDestructiveNode(state, 'destructive-check')));
   document.querySelector('#new-session')?.addEventListener('click', () => save(createSession(state)));
-  document.querySelector('#agent-name')?.addEventListener('input', (event) => save(updateAgentProfile(state, state.activeAgentId, { name: event.target.value })));
-  document.querySelector('#profile-image')?.addEventListener('input', (event) => save(updateAgentProfile(state, state.activeAgentId, { profileImage: event.target.value })));
-  document.querySelector('#agent-md')?.addEventListener('input', (event) => save(updateAgentMarkdown(state, state.activeAgentId, event.target.value)));
+  document.querySelector('#agent-name')?.addEventListener('input', (event) => updateDraft(updateAgentProfile(state, state.activeAgentId, { name: event.target.value })));
+  document.querySelector('#profile-image')?.addEventListener('input', (event) => updateDraft(updateAgentProfile(state, state.activeAgentId, { profileImage: event.target.value })));
+  document.querySelector('#agent-md')?.addEventListener('input', (event) => updateDraft(updateAgentMarkdown(state, state.activeAgentId, event.target.value)));
   document.querySelectorAll('[data-agent-id]').forEach((element) => element.addEventListener('click', () => save(selectAgent(state, element.dataset.agentId))));
   document.querySelectorAll('[data-skill-id]').forEach((element) => element.addEventListener('click', () => save(assignSkillToAgent(state, state.activeAgentId, element.dataset.skillId))));
   document.querySelectorAll('[data-node-id]').forEach((element) => element.addEventListener('click', () => save(selectNode(state, element.dataset.nodeId))));
   document.querySelectorAll('[data-fork-session]').forEach((element) => element.addEventListener('click', () => save(forkSession(state, element.dataset.forkSession))));
+}
+
+async function exportWorkspaceToFiles() {
+  try {
+    const response = await fetch('/api/export-workspace', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ files: exportWorkspaceFiles(state) }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    exportStatus = `${t('exportDone')}: ${payload.written}`;
+  } catch (error) {
+    exportStatus = `${t('exportFailed')}: ${error.message}`;
+  }
+  render();
 }
 
 render();
