@@ -14,6 +14,8 @@ import {
   runGraphUntilBlocked,
   getWikiSkillPack,
   deserializeState,
+  addWarPlanNode,
+  removeWarPlanNode,
 } from '../app/app-model.mjs';
 
 test('initial state exposes tutorial graph with wiki-make assigned to wiki-maker agent', () => {
@@ -54,6 +56,48 @@ test('initial state includes Karpathy and game UI reviewer agents with actionabl
   assert.match(gameUx.agentMd, /^# Game UI\/UX Master Agent/);
   assert.ok(karpathy.feedback.some((item) => item.includes('persistent wiki')));
   assert.ok(gameUx.feedback.some((item) => item.includes('moment-to-moment')));
+});
+
+test('initial state includes a rigorous adversarial QA agent with precise critique', () => {
+  const state = createInitialState();
+  const adversary = state.agents.find((agent) => agent.id === 'adversarial-qa');
+
+  assert.equal(adversary.name, 'Adversarial QA Agent');
+  assert.equal(adversary.className, 'Hostile Precision Reviewer');
+  assert.match(adversary.agentMd, /^# Adversarial QA Agent/);
+  assert.ok(adversary.feedback.some((item) => item.includes('focus')));
+  assert.ok(adversary.feedback.some((item) => item.includes('node add')));
+});
+
+test('addWarPlanNode appends an editable node owned by the active agent', () => {
+  const state = createInitialState();
+  const updated = addWarPlanNode(state);
+  const added = updated.graph.nodes.at(-1);
+
+  assert.equal(updated.graph.nodes.length, state.graph.nodes.length + 1);
+  assert.equal(added.title, 'Custom Node 1');
+  assert.equal(added.agentId, 'wiki-maker');
+  assert.equal(added.status, 'idle');
+  assert.deepEqual(updated.graph.edges.at(-1), ['session-plan', added.id]);
+  assert.equal(updated.selectedNodeId, added.id);
+});
+
+test('removeWarPlanNode removes selected editable nodes and their edges', () => {
+  const state = addWarPlanNode(createInitialState());
+  const addedId = state.selectedNodeId;
+  const removed = removeWarPlanNode(state, addedId);
+
+  assert.equal(removed.graph.nodes.some((node) => node.id === addedId), false);
+  assert.equal(removed.graph.edges.some((edge) => edge.includes(addedId)), false);
+  assert.equal(removed.selectedNodeId, 'session-plan');
+});
+
+test('removeWarPlanNode keeps the protected start node', () => {
+  const state = createInitialState();
+  const removed = removeWarPlanNode(state, 'start');
+
+  assert.equal(removed.graph.nodes.length, state.graph.nodes.length);
+  assert.equal(removed.graph.nodes.some((node) => node.id === 'start'), true);
 });
 
 test('startTutorialSession completes automatic nodes and blocks destructive command for approval', () => {

@@ -135,6 +135,21 @@ export function createInitialState() {
           'Keep the pixel RPG theme, but prioritize fast scanning of node state, risk, and ownership.',
         ],
       },
+      {
+        id: 'adversarial-qa',
+        name: 'Adversarial QA Agent',
+        className: 'Hostile Precision Reviewer',
+        level: 1,
+        xp: 0,
+        profileImage: '',
+        selectedSkills: ['wiki-lint', 'wiki-review-actions'],
+        agentMd: '# Adversarial QA Agent\n\nTests the app with hostile precision: assume happy paths lie, inspect edge cases, and convert criticism into exact fixes.\n\n- Reproduce failures before judging\n- Name the root cause, not the symptom\n- Demand node add/remove, focus stability, and persistence proofs',
+        feedback: [
+          'focus bug was severe: typing must never re-render the active editor out from under the user.',
+          'War-plan graph editing is incomplete without node add and remove controls with protected start-node behavior.',
+          'Persistence claims require a visible save action and a real file written under .harness-rpg/.',
+        ],
+      },
     ],
     activeAgentId: 'wiki-maker',
     skills: wikiSkills,
@@ -267,6 +282,48 @@ export function getGraphProgress(state) {
 
 export function getWikiSkillPack(state) {
   return state.skills.map((skill) => ({ ...skill }));
+}
+
+export function addWarPlanNode(state) {
+  const customCount = state.graph.nodes.filter((nodeItem) => nodeItem.id.startsWith('custom-node-')).length + 1;
+  const id = `custom-node-${customCount}`;
+  const previousNode = state.graph.nodes.at(-1);
+  const newNode = node(
+    id,
+    `Custom Node ${customCount}`,
+    state.activeAgentId,
+    [],
+    'idle',
+    'Describe the next delegated graph task.',
+  );
+
+  return {
+    ...state,
+    selectedNodeId: id,
+    graph: {
+      ...state.graph,
+      nodes: [...state.graph.nodes, newNode],
+      edges: previousNode ? [...state.graph.edges, [previousNode.id, id]] : state.graph.edges,
+    },
+  };
+}
+
+export function removeWarPlanNode(state, nodeId) {
+  if (nodeId === 'start') return state;
+  const targetExists = state.graph.nodes.some((nodeItem) => nodeItem.id === nodeId);
+  if (!targetExists) return state;
+  const remainingNodes = state.graph.nodes.filter((nodeItem) => nodeItem.id !== nodeId);
+  const selectedNodeId = state.selectedNodeId === nodeId ? remainingNodes.at(-1)?.id ?? 'start' : state.selectedNodeId;
+
+  return {
+    ...state,
+    selectedNodeId,
+    graph: {
+      ...state.graph,
+      nodes: remainingNodes,
+      edges: state.graph.edges.filter(([from, to]) => from !== nodeId && to !== nodeId),
+    },
+  };
 }
 
 export function exportWorkspaceFiles(state) {
