@@ -1,5 +1,17 @@
 const PROJECT_PATH = '/home/sungjin/workspace/harness-rpg';
 
+const backendDefaults = {
+  shell: 'Tauri Rust command bridge',
+  database: '.harness-rpg/harness.sqlite',
+  fileState: '.harness-rpg/state.json',
+  agentsDir: '.harness-rpg/agents',
+  skillsDir: '.harness-rpg/skills',
+  bridge: {
+    mode: 'OpenCode MCP/API',
+    fallback: 'filesystem event log',
+  },
+};
+
 export const wikiSkills = [
   {
     id: 'wiki-ingest-source',
@@ -59,6 +71,8 @@ export function createInitialState() {
       stateDir: '.harness-rpg/',
       bridge: 'OpenCode MCP/API bridge',
     },
+    backend: backendDefaults,
+    bridgeEvents: [],
     locale: 'ko',
     agents: [
       {
@@ -251,22 +265,43 @@ export function getGraphProgress(state) {
   };
 }
 
+export function getWikiSkillPack(state) {
+  return state.skills.map((skill) => ({ ...skill }));
+}
+
+export function exportWorkspaceFiles(state) {
+  const files = {
+    [state.backend.fileState]: `${JSON.stringify(state, null, 2)}\n`,
+  };
+
+  for (const agent of state.agents) {
+    files[`${state.backend.agentsDir}/${agent.id}/AGENT.md`] = `${agent.agentMd}\n`;
+  }
+
+  for (const skill of state.skills) {
+    files[`${state.backend.skillsDir}/${skill.id}.md`] = `${skill.markdown}\n`;
+  }
+
+  return files;
+}
+
+export function runGraphUntilBlocked(state) {
+  let currentState = state;
+  for (const nodeItem of state.graph.nodes) {
+    const currentNode = currentState.graph.nodes.find((candidate) => candidate.id === nodeItem.id);
+    if (!currentNode || currentNode.status === 'completed') continue;
+    if (currentNode.destructive) return requireApproval(currentState, currentNode.id);
+    currentState = completeGraphNode(currentState, currentNode.id);
+  }
+  return currentState;
+}
+
 export function startTutorialSession(state) {
-  const completed = new Set(['start', 'wiki-make', 'skill-attune']);
-  const completedNodes = state.graph.nodes.filter((nodeItem) => completed.has(nodeItem.id) && nodeItem.agentId !== 'System');
+  const running = runGraphUntilBlocked(state);
   return {
-    ...state,
-    agents: awardClearedNodeExperience(state.agents, completedNodes),
+    ...running,
     selectedNodeId: 'wiki-make',
-    sessions: state.sessions.map((session) => session.id === state.activeSessionId ? { ...session, status: 'running' } : session),
-    graph: {
-      ...state.graph,
-      nodes: state.graph.nodes.map((nodeItem) => {
-        if (completed.has(nodeItem.id)) return completeNode(nodeItem);
-        if (nodeItem.id === 'destructive-check') return approvalNode(nodeItem);
-        return nodeItem;
-      }),
-    },
+    sessions: running.sessions.map((session) => session.id === running.activeSessionId ? { ...session, status: 'running' } : session),
   };
 }
 
@@ -327,16 +362,55 @@ function approvalNode(nodeItem) {
   };
 }
 
-export function approveDestructiveNode(state, nodeId) {
+function appendBridgeEvent(state, event) {
+  return { ...state, bridgeEvents: [...state.bridgeEvents, event] };
+}
+
+function completeGraphNode(state, nodeId) {
   const clearedNode = state.graph.nodes.find((nodeItem) => nodeItem.id === nodeId);
-  return {
+  const nextState = {
     ...state,
-    agents: clearedNode ? awardClearedNodeExperience(state.agents, [clearedNode]) : state.agents,
+    agents: clearedNode && clearedNode.agentId !== 'System' ? awardClearedNodeExperience(state.agents, [clearedNode]) : state.agents,
+    graph: {
+      ...state.graph,
+      nodes: state.graph.nodes.map((nodeItem) => nodeItem.id === nodeId ? completeNode(nodeItem) : nodeItem),
+    },
+  };
+
+  return appendBridgeEvent(nextState, {
+    type: 'node.completed',
+    nodeId,
+    agentId: clearedNode?.agentId ?? 'System',
+    skills: clearedNode?.skills ?? [],
+  });
+}
+
+function requireApproval(state, nodeId) {
+  const gatedNode = state.graph.nodes.find((nodeItem) => nodeItem.id === nodeId);
+  const nextState = {
+    ...state,
     selectedNodeId: nodeId,
     graph: {
       ...state.graph,
-      nodes: state.graph.nodes.map((nodeItem) => nodeItem.id === nodeId ? completeNode({ ...nodeItem, status: 'running' }) : nodeItem),
+      nodes: state.graph.nodes.map((nodeItem) => nodeItem.id === nodeId ? approvalNode(nodeItem) : nodeItem),
     },
+  };
+
+  return appendBridgeEvent(nextState, {
+    type: 'approval.required',
+    nodeId,
+    agentId: gatedNode?.agentId ?? 'System',
+    skills: gatedNode?.skills ?? [],
+  });
+}
+
+export function approveDestructiveNode(state, nodeId) {
+  const approved = completeGraphNode(state, nodeId);
+  const remaining = approved.graph.nodes.slice(approved.graph.nodes.findIndex((nodeItem) => nodeItem.id === nodeId) + 1);
+  const completed = remaining.reduce((currentState, nodeItem) => completeGraphNode(currentState, nodeItem.id), approved);
+  return {
+    ...completed,
+    selectedNodeId: nodeId,
   };
 }
 
@@ -364,8 +438,23 @@ export function serializeState(state) {
 
 export function deserializeState(raw) {
   try {
-    return raw ? JSON.parse(raw) : createInitialState();
+    return raw ? migrateState(JSON.parse(raw)) : createInitialState();
   } catch {
     return createInitialState();
   }
+}
+
+function migrateState(state) {
+  return {
+    ...state,
+    backend: {
+      ...backendDefaults,
+      ...(state.backend ?? {}),
+      bridge: {
+        ...backendDefaults.bridge,
+        ...(state.backend?.bridge ?? {}),
+      },
+    },
+    bridgeEvents: state.bridgeEvents ?? [],
+  };
 }

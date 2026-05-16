@@ -10,6 +10,10 @@ import {
   setLocale,
   updateAgentProfile,
   getGraphProgress,
+  exportWorkspaceFiles,
+  runGraphUntilBlocked,
+  getWikiSkillPack,
+  deserializeState,
 } from '../app/app-model.mjs';
 
 test('initial state exposes tutorial graph with wiki-make assigned to wiki-maker agent', () => {
@@ -72,7 +76,73 @@ test('getGraphProgress reports total graph completion percent', () => {
 
   assert.deepEqual(initial, { completed: 0, total: 5, percent: 0 });
   assert.deepEqual(running, { completed: 3, total: 5, percent: 60 });
-  assert.deepEqual(approved, { completed: 4, total: 5, percent: 80 });
+  assert.deepEqual(approved, { completed: 5, total: 5, percent: 100 });
+});
+
+test('initial state declares the local-first Tauri backend contract', () => {
+  const state = createInitialState();
+
+  assert.equal(state.backend.shell, 'Tauri Rust command bridge');
+  assert.equal(state.backend.database, '.harness-rpg/harness.sqlite');
+  assert.equal(state.backend.fileState, '.harness-rpg/state.json');
+  assert.equal(state.backend.bridge.mode, 'OpenCode MCP/API');
+});
+
+test('deserializeState migrates older saved browser state with backend defaults', () => {
+  const legacy = createInitialState();
+  delete legacy.backend;
+  delete legacy.bridgeEvents;
+
+  const migrated = deserializeState(JSON.stringify(legacy));
+
+  assert.equal(migrated.backend.fileState, '.harness-rpg/state.json');
+  assert.deepEqual(migrated.bridgeEvents, []);
+});
+
+test('exportWorkspaceFiles emits file-backed Agent.md, skills, and state paths', () => {
+  const files = exportWorkspaceFiles(createInitialState());
+
+  assert.match(files['.harness-rpg/agents/wiki-maker/AGENT.md'], /^# Wiki Maker Agent/);
+  assert.match(files['.harness-rpg/skills/wiki-ingest-source.md'], /^# wiki-ingest-source/);
+  assert.match(files['.harness-rpg/state.json'], /"activeSessionId": "session-001"/);
+});
+
+test('runGraphUntilBlocked executes nodes through the OpenCode bridge until approval is required', () => {
+  const running = runGraphUntilBlocked(createInitialState());
+
+  assert.equal(running.graph.nodes.find((node) => node.id === 'wiki-make').status, 'completed');
+  assert.equal(running.graph.nodes.find((node) => node.id === 'destructive-check').status, 'approval_required');
+  assert.equal(running.bridgeEvents.length, 4);
+  assert.deepEqual(running.bridgeEvents.at(-1), {
+    type: 'approval.required',
+    nodeId: 'destructive-check',
+    agentId: 'gate-warden',
+    skills: ['wiki-lint'],
+  });
+});
+
+test('approving the destructive node continues the graph executor to completion', () => {
+  const approved = approveDestructiveNode(runGraphUntilBlocked(createInitialState()), 'destructive-check');
+
+  assert.equal(approved.graph.nodes.find((node) => node.id === 'session-plan').status, 'completed');
+  assert.equal(approved.bridgeEvents.at(-1).nodeId, 'session-plan');
+  assert.equal(getGraphProgress(approved).percent, 100);
+});
+
+test('getWikiSkillPack exposes llm_wiki concepts as host-agent skills', () => {
+  const pack = getWikiSkillPack(createInitialState());
+
+  assert.deepEqual(pack.map((skill) => skill.id), [
+    'wiki-ingest-source',
+    'wiki-query',
+    'wiki-lint',
+    'wiki-build-graph',
+    'wiki-detect-gaps',
+    'wiki-deep-research',
+    'wiki-review-actions',
+    'wiki-enrich-wikilinks',
+  ]);
+  assert.ok(pack.every((skill) => skill.markdown.startsWith('# ')));
 });
 
 test('initial graph nodes expose separated review artifacts for human inspection', () => {
