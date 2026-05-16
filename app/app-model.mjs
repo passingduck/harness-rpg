@@ -173,6 +173,29 @@ function node(id, title, agentId, skills, status, description, destructive = fal
       artifacts: [],
       why: 'No skill used yet.',
     },
+    review: createReviewBundle({ id, title, agentId, skills, status, description, destructive }),
+  };
+}
+
+function createReviewBundle(nodeItem, completed = false) {
+  const skillText = nodeItem.skills.length ? nodeItem.skills.join(', ') : 'none';
+  const resultText = completed
+    ? `${nodeItem.title} completed by ${nodeItem.agentId} agent with ${skillText}.`
+    : `${nodeItem.title} is waiting for execution.`;
+  const diffText = completed && nodeItem.id === 'wiki-make'
+    ? 'Diff: Added wiki/index.md, wiki/overview.md, and concepts/opencode-bridge.md to the project wiki artifact set.'
+    : completed
+      ? `Diff: Captured ${nodeItem.id} node event artifacts without mixing results from other nodes.`
+      : `Diff: No file changes yet for ${nodeItem.id}.`;
+
+  return {
+    plan: `Plan: ${nodeItem.description}`,
+    spec: `Spec: Agent ${nodeItem.agentId} owns this graph node and may use ${skillText}.`,
+    log: completed
+      ? `Log: ${nodeItem.title} finished through the OpenCode MCP bridge.`
+      : `Log: ${nodeItem.title} has not started yet.`,
+    diff: diffText,
+    result: `Result: ${resultText}`,
   };
 }
 
@@ -218,6 +241,16 @@ export function selectAgent(state, agentId) {
   return { ...state, activeAgentId: agentId };
 }
 
+export function getGraphProgress(state) {
+  const total = state.graph.nodes.length;
+  const completed = state.graph.nodes.filter((nodeItem) => nodeItem.status === 'completed').length;
+  return {
+    completed,
+    total,
+    percent: total === 0 ? 0 : Math.round((completed / total) * 100),
+  };
+}
+
 export function startTutorialSession(state) {
   const completed = new Set(['start', 'wiki-make', 'skill-attune']);
   const completedNodes = state.graph.nodes.filter((nodeItem) => completed.has(nodeItem.id) && nodeItem.agentId !== 'System');
@@ -255,6 +288,7 @@ function awardAgentExperience(agents, agentId) {
 
 function completeNode(nodeItem) {
   const skillText = nodeItem.skills.length ? nodeItem.skills.join(', ') : 'none';
+  const review = createReviewBundle(nodeItem, true);
   return {
     ...nodeItem,
     status: 'completed',
@@ -268,6 +302,10 @@ function completeNode(nodeItem) {
         ? `${skillText} was selected because this node maintains project knowledge without direct foundation-LLM coupling.`
         : 'Start node boots the tutorial graph.',
     },
+    review: {
+      ...review,
+      summary: `${nodeItem.title} completed as a node-scoped review package: plan, spec, log, diff, and result are ready for human inspection.`,
+    },
   };
 }
 
@@ -280,6 +318,11 @@ function approvalNode(nodeItem) {
       raw: `event=approval.required node=${nodeItem.id} reason=destructive_command`,
       artifacts: ['approval-request.json'],
       why: 'Only destructive commands require a gate; normal graph work auto-runs.',
+    },
+    review: {
+      ...createReviewBundle(nodeItem),
+      log: `Log: ${nodeItem.title} is paused until the user approves the destructive command gate.`,
+      result: 'Result: Waiting for explicit destructive-command approval.',
     },
   };
 }

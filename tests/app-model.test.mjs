@@ -9,6 +9,7 @@ import {
   approveDestructiveNode,
   setLocale,
   updateAgentProfile,
+  getGraphProgress,
 } from '../app/app-model.mjs';
 
 test('initial state exposes tutorial graph with wiki-make assigned to wiki-maker agent', () => {
@@ -62,6 +63,48 @@ test('startTutorialSession completes automatic nodes and blocks destructive comm
   assert.match(running.graph.nodes.find((node) => node.id === 'wiki-make').logs.friendly, /wiki-maker agent/);
   assert.equal(wikiMaker.xp, 2);
   assert.equal(wikiMaker.level, 1);
+});
+
+test('getGraphProgress reports total graph completion percent', () => {
+  const initial = getGraphProgress(createInitialState());
+  const running = getGraphProgress(startTutorialSession(createInitialState()));
+  const approved = getGraphProgress(approveDestructiveNode(startTutorialSession(createInitialState()), 'destructive-check'));
+
+  assert.deepEqual(initial, { completed: 0, total: 5, percent: 0 });
+  assert.deepEqual(running, { completed: 3, total: 5, percent: 60 });
+  assert.deepEqual(approved, { completed: 4, total: 5, percent: 80 });
+});
+
+test('initial graph nodes expose separated review artifacts for human inspection', () => {
+  const state = createInitialState();
+  const wikiNode = state.graph.nodes.find((node) => node.id === 'wiki-make');
+
+  assert.deepEqual(Object.keys(wikiNode.review), ['plan', 'spec', 'log', 'diff', 'result']);
+  assert.match(wikiNode.review.plan, /Plan:/);
+  assert.match(wikiNode.review.spec, /Spec:/);
+  assert.match(wikiNode.review.log, /Log:/);
+  assert.match(wikiNode.review.diff, /Diff:/);
+  assert.match(wikiNode.review.result, /Result:/);
+});
+
+test('completed nodes expose a human-friendly review summary', () => {
+  const state = startTutorialSession(createInitialState());
+  const wikiNode = state.graph.nodes.find((node) => node.id === 'wiki-make');
+
+  assert.match(wikiNode.review.summary, /Wiki Make completed/);
+  assert.match(wikiNode.review.result, /completed by wiki-maker agent/);
+  assert.match(wikiNode.review.diff, /wiki\/index\.md/);
+});
+
+test('review artifacts stay scoped to the selected graph node', () => {
+  const state = startTutorialSession(createInitialState());
+  const wikiNode = state.graph.nodes.find((node) => node.id === 'wiki-make');
+  const skillNode = state.graph.nodes.find((node) => node.id === 'skill-attune');
+
+  assert.match(wikiNode.review.plan, /Create the first project knowledge map/);
+  assert.match(skillNode.review.plan, /Bind OpenCode skills to the agent party/);
+  assert.notEqual(wikiNode.review.plan, skillNode.review.plan);
+  assert.notEqual(wikiNode.review.result, skillNode.review.result);
 });
 
 test('approveDestructiveNode completes the gated destructive command node', () => {
