@@ -12,6 +12,7 @@ import {
   approveDestructiveNode,
   createSession,
   forkSession,
+  exportWorkspaceFiles,
 } from './app-model.mjs';
 
 const STORAGE_KEY = 'harness-rpg-state-v1';
@@ -21,6 +22,7 @@ const copy = {
   ko: {
     tagline: 'OpenCode MCP/API 브릿지 · 로컬 우선 에이전트 작업대',
     project: '프로젝트', openProject: '프로젝트 열기', stateDir: '상태 디렉터리',
+    localBackend: '로컬 백엔드', database: 'SQLite DB', fileState: '파일 상태', bridgeMode: '브릿지', exportedFiles: '파일-backed export', bridgeEvents: '브릿지 이벤트',
     agentParty: '에이전트 파티', sessions: '세션', newSession: '새 세션', fork: '포크',
     warPlan: '전쟁 계획 튜토리얼', sessionStart: '세션 시작', approve: '파괴 명령 승인',
     overallProgress: '전체 진행률', clearedNodes: '클리어 노드',
@@ -36,6 +38,7 @@ const copy = {
   en: {
     tagline: 'OpenCode MCP/API bridge · local-first agent workbench',
     project: 'Project', openProject: 'Open Project', stateDir: 'State dir',
+    localBackend: 'Local Backend', database: 'SQLite DB', fileState: 'File State', bridgeMode: 'Bridge', exportedFiles: 'File-backed Export', bridgeEvents: 'Bridge Events',
     agentParty: 'Agent Party', sessions: 'Sessions', newSession: 'New Session', fork: 'Fork',
     warPlan: 'War Plan Tutorial', sessionStart: 'Session Start', approve: 'Approve Destructive Command',
     overallProgress: 'Overall Progress', clearedNodes: 'Cleared Nodes',
@@ -191,6 +194,33 @@ function renderReviewCenter(node) {
   `;
 }
 
+function renderBackendPanel() {
+  const files = exportWorkspaceFiles(state);
+  const fileNames = Object.keys(files).slice(0, 6);
+  return `
+    <section class="pixel-panel">
+      <h2 class="section-title">${t('localBackend')}</h2>
+      <dl class="backend-list">
+        <dt>${t('database')}</dt><dd>${state.backend.database}</dd>
+        <dt>${t('fileState')}</dt><dd>${state.backend.fileState}</dd>
+        <dt>${t('bridgeMode')}</dt><dd>${state.backend.bridge.mode}</dd>
+      </dl>
+      <h3>${t('exportedFiles')}</h3>
+      <ul class="file-list">${fileNames.map((file) => `<li>${file}</li>`).join('')}</ul>
+    </section>
+  `;
+}
+
+function renderBridgeEvents() {
+  const events = state.bridgeEvents.slice(-6).reverse();
+  return `
+    <section class="pixel-panel">
+      <h2 class="section-title">${t('bridgeEvents')}</h2>
+      <ul class="event-list">${events.map((event) => `<li><strong>${event.type}</strong><span>${event.nodeId} · ${event.agentId} · ${event.skills.join(', ') || 'none'}</span></li>`).join('')}</ul>
+    </section>
+  `;
+}
+
 function render() {
   const agent = activeAgent();
   const node = selectedNode();
@@ -208,6 +238,7 @@ function render() {
           <small class="muted">${t('stateDir')}: ${state.project.stateDir} · SQLite + markdown files</small>
           <p><button id="open-project">${t('openProject')}</button></p>
         </section>
+        ${renderBackendPanel()}
         <section class="pixel-panel">
           <h2 class="section-title">${t('agentParty')}</h2>
           ${renderAgents()}
@@ -238,6 +269,7 @@ function render() {
           <p class="muted">${t('wikiHelp')}</p>
           <div class="wiki-map">${renderWikiMap()}</div>
         </section>
+        ${renderBridgeEvents()}
       </main>
 
       <aside class="inspector">
