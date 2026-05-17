@@ -16,6 +16,13 @@ import {
   deserializeState,
   addWarPlanNode,
   removeWarPlanNode,
+  assignAgentToNode,
+  buildOuroborosProtocolPayload,
+  applyWarPlanSpec,
+  updateNodeText,
+  canRemoveWarPlanNode,
+  moveWarPlanNode,
+  swapWarPlanNodes,
 } from '../app/app-model.mjs';
 
 test('initial state exposes tutorial graph with wiki-make assigned to wiki-maker agent', () => {
@@ -69,6 +76,17 @@ test('initial state includes a rigorous adversarial QA agent with precise critiq
   assert.ok(adversary.feedback.some((item) => item.includes('node add')));
 });
 
+test('initial state includes a responsive UI UX expert agent for breakpoint review', () => {
+  const state = createInitialState();
+  const responsive = state.agents.find((agent) => agent.id === 'responsive-ui-ux');
+
+  assert.equal(responsive.name, 'Responsive UI/UX Expert Agent');
+  assert.equal(responsive.className, 'Breakpoint Experience Specialist');
+  assert.match(responsive.agentMd, /^# Responsive UI\/UX Expert Agent/);
+  assert.ok(responsive.feedback.some((item) => item.includes('mobile')));
+  assert.ok(responsive.feedback.some((item) => item.includes('breakpoint')));
+});
+
 test('addWarPlanNode appends an editable node owned by the active agent', () => {
   const state = createInitialState();
   const updated = addWarPlanNode(state);
@@ -107,10 +125,153 @@ test('startTutorialSession completes automatic nodes and blocks destructive comm
 
   assert.equal(running.graph.nodes.find((node) => node.id === 'wiki-make').status, 'completed');
   assert.equal(running.graph.nodes.find((node) => node.id === 'destructive-check').status, 'approval_required');
-  assert.equal(running.selectedNodeId, 'wiki-make');
+  assert.equal(running.selectedNodeId, 'destructive-check');
   assert.match(running.graph.nodes.find((node) => node.id === 'wiki-make').logs.friendly, /wiki-maker agent/);
   assert.equal(wikiMaker.xp, 2);
   assert.equal(wikiMaker.level, 1);
+});
+
+test('addWarPlanNode uses the next unused custom node id after removals', () => {
+  let state = addWarPlanNode(createInitialState());
+  state = addWarPlanNode(state);
+  state = removeWarPlanNode(state, 'custom-node-1');
+  state = addWarPlanNode(state);
+
+  assert.deepEqual(state.graph.nodes.filter((node) => node.id.startsWith('custom-node-')).map((node) => node.id), [
+    'custom-node-2',
+    'custom-node-3',
+  ]);
+});
+
+test('removeWarPlanNode keeps built-in tutorial nodes protected', () => {
+  const state = addWarPlanNode(createInitialState());
+  const removed = removeWarPlanNode(state, 'wiki-make');
+
+  assert.equal(removed.graph.nodes.length, state.graph.nodes.length);
+  assert.equal(removed.graph.nodes.some((node) => node.id === 'wiki-make'), true);
+});
+
+test('moveWarPlanNode stores graph coordinates for dragged nodes', () => {
+  const moved = moveWarPlanNode(createInitialState(), 'wiki-make', { x: 222, y: 111 });
+  const node = moved.graph.nodes.find((item) => item.id === 'wiki-make');
+
+  assert.deepEqual(node.position, { x: 222, y: 111 });
+  assert.equal(moved.selectedNodeId, 'wiki-make');
+});
+
+test('swapWarPlanNodes exchanges graph order and positions on hover drop', () => {
+  const positioned = moveWarPlanNode(moveWarPlanNode(createInitialState(), 'wiki-make', { x: 10, y: 20 }), 'session-plan', { x: 600, y: 200 });
+  const swapped = swapWarPlanNodes(positioned, 'wiki-make', 'session-plan');
+
+  assert.deepEqual(swapped.graph.nodes.map((node) => node.id), ['start', 'session-plan', 'skill-attune', 'destructive-check', 'wiki-make']);
+  assert.deepEqual(swapped.graph.nodes.find((node) => node.id === 'wiki-make').position, { x: 600, y: 200 });
+  assert.deepEqual(swapped.graph.nodes.find((node) => node.id === 'session-plan').position, { x: 10, y: 20 });
+  assert.equal(swapped.selectedNodeId, 'wiki-make');
+});
+
+test('assignAgentToNode changes a node owner and refreshes its review spec', () => {
+  const state = createInitialState();
+  const updated = assignAgentToNode(state, 'wiki-make', 'adversarial-qa');
+  const node = updated.graph.nodes.find((item) => item.id === 'wiki-make');
+
+  assert.equal(node.agentId, 'adversarial-qa');
+  assert.match(node.review.spec, /Agent adversarial-qa owns this graph node/);
+});
+
+test('assignAgentToNode keeps the system start node and unknown ids unchanged', () => {
+  const state = createInitialState();
+  const changedStart = assignAgentToNode(state, 'start', 'adversarial-qa');
+  const changedMissing = assignAgentToNode(state, 'wiki-make', 'missing-agent');
+
+  assert.equal(changedStart.graph.nodes.find((node) => node.id === 'start').agentId, 'System');
+  assert.equal(changedMissing.graph.nodes.find((node) => node.id === 'wiki-make').agentId, 'wiki-maker');
+});
+
+test('buildOuroborosProtocolPayload includes graph schema, node specs, and review artifacts', () => {
+  const state = createInitialState();
+  const payload = buildOuroborosProtocolPayload(state);
+
+  assert.equal(payload.protocol, 'harness-rpg-war-plan-v1');
+  assert.match(payload.prompt, /Return JSON only/);
+  assert.match(payload.prompt, /Harness RPG visualizes war plans as graph nodes and edges/);
+  assert.deepEqual(payload.graphSchema.nodeFields, ['id', 'title', 'description', 'agentId', 'skills', 'status', 'destructive']);
+  assert.deepEqual(payload.currentGraph.edges.at(0), ['start', 'wiki-make']);
+  assert.match(payload.currentGraph.nodes.find((node) => node.id === 'wiki-make').review.spec, /Agent wiki-maker owns this graph node/);
+});
+
+test('applyWarPlanSpec updates graph nodes and preserves protected system nodes', () => {
+  const state = createInitialState();
+  const updated = applyWarPlanSpec(state, {
+    protocol: 'harness-rpg-war-plan-v1',
+    nodes: [
+      { id: 'start', title: 'Rewritten Start', description: 'Should stay protected.', agentId: 'adversarial-qa' },
+      { id: 'wiki-make', title: 'Map Product Lore', description: 'Ask Ouroboros for repo-aware wiki tasks.', agentId: 'responsive-ui-ux', skills: ['wiki-query'] },
+      { id: 'responsive-review', title: 'Responsive Review', description: 'Check every breakpoint.', agentId: 'responsive-ui-ux', skills: ['wiki-review-actions'] },
+    ],
+    edges: [
+      ['start', 'wiki-make'],
+      ['wiki-make', 'responsive-review'],
+    ],
+  });
+
+  assert.equal(updated.graph.nodes.find((node) => node.id === 'start').title, 'Start');
+  assert.equal(updated.graph.nodes.find((node) => node.id === 'start').agentId, 'System');
+  assert.equal(updated.graph.nodes.find((node) => node.id === 'wiki-make').title, 'Map Product Lore');
+  assert.equal(updated.graph.nodes.find((node) => node.id === 'wiki-make').agentId, 'responsive-ui-ux');
+  assert.equal(updated.graph.nodes.find((node) => node.id === 'responsive-review').description, 'Check every breakpoint.');
+  assert.deepEqual(updated.graph.edges.at(-1), ['wiki-make', 'responsive-review']);
+  assert.equal(updated.selectedNodeId, 'responsive-review');
+});
+
+test('applyWarPlanSpec normalizes object edges and rejects malformed nodes', () => {
+  const updated = applyWarPlanSpec(createInitialState(), {
+    protocol: 'harness-rpg-war-plan-v1',
+    nodes: [
+      { id: 'valid-import', title: 'Valid Import', description: 'Allowed node.', agentId: 'forge-master', skills: ['wiki-query', 'missing-skill'] },
+      { id: 'valid-import', title: 'Duplicate Import', description: 'Should be ignored.', agentId: 'forge-master' },
+      { id: '../bad', title: 'Bad Import', description: 'Should be rejected.', agentId: 'forge-master' },
+    ],
+    edges: [
+      { fromNodeId: 'wiki-make', toNodeId: 'valid-import' },
+      ['valid-import', 'missing-node'],
+    ],
+  });
+
+  const imported = updated.graph.nodes.find((node) => node.id === 'valid-import');
+  assert.equal(imported.title, 'Valid Import');
+  assert.deepEqual(imported.skills, ['wiki-query']);
+  assert.equal(updated.graph.nodes.filter((node) => node.id === 'valid-import').length, 1);
+  assert.equal(updated.graph.nodes.some((node) => node.id === '../bad'), false);
+  assert.deepEqual(updated.graph.edges, [['wiki-make', 'valid-import']]);
+});
+
+test('removeWarPlanNode removes imported nodes but keeps built-in tutorial nodes', () => {
+  const imported = applyWarPlanSpec(createInitialState(), {
+    nodes: [{ id: 'imported-node', title: 'Imported Node', description: 'Can be removed.', agentId: 'forge-master' }],
+    edges: [['session-plan', 'imported-node']],
+  });
+
+  assert.equal(canRemoveWarPlanNode(imported, 'wiki-make'), false);
+  assert.equal(canRemoveWarPlanNode(imported, 'imported-node'), true);
+  const removed = removeWarPlanNode(imported, 'imported-node');
+  assert.equal(removed.graph.nodes.some((node) => node.id === 'imported-node'), false);
+  assert.equal(removed.graph.edges.some((edge) => edge.includes('imported-node')), false);
+});
+
+test('updateNodeText changes title and description while keeping node ownership and review data', () => {
+  const state = createInitialState();
+  const updated = updateNodeText(state, 'wiki-make', {
+    title: 'Repo Wiki Plan',
+    description: 'Turn the current repo into graph-shaped wiki work.',
+  });
+  const node = updated.graph.nodes.find((item) => item.id === 'wiki-make');
+
+  assert.equal(node.title, 'Repo Wiki Plan');
+  assert.equal(node.description, 'Turn the current repo into graph-shaped wiki work.');
+  assert.equal(node.agentId, 'wiki-maker');
+  assert.deepEqual(node.skills, ['wiki-ingest-source', 'wiki-build-graph']);
+  assert.match(node.review.plan, /Turn the current repo into graph-shaped wiki work/);
+  assert.match(node.review.spec, /Agent wiki-maker owns this graph node/);
 });
 
 test('getGraphProgress reports total graph completion percent', () => {
@@ -171,6 +332,18 @@ test('approving the destructive node continues the graph executor to completion'
   assert.equal(approved.graph.nodes.find((node) => node.id === 'session-plan').status, 'completed');
   assert.equal(approved.bridgeEvents.at(-1).nodeId, 'session-plan');
   assert.equal(getGraphProgress(approved).percent, 100);
+});
+
+test('approveDestructiveNode pauses again at the next destructive imported node', () => {
+  const imported = applyWarPlanSpec(createInitialState(), {
+    nodes: [{ id: 'second-gate', title: 'Second Gate', description: 'Needs its own approval.', agentId: 'gate-warden', skills: ['wiki-lint'], destructive: true }],
+    edges: [['session-plan', 'second-gate']],
+  });
+  const running = startTutorialSession(imported);
+  const approved = approveDestructiveNode(running, 'destructive-check');
+
+  assert.equal(approved.graph.nodes.find((node) => node.id === 'second-gate').status, 'approval_required');
+  assert.equal(approved.selectedNodeId, 'second-gate');
 });
 
 test('getWikiSkillPack exposes llm_wiki concepts as host-agent skills', () => {

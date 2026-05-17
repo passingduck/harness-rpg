@@ -12,6 +12,12 @@ const backendDefaults = {
   },
 };
 
+const protectedWarPlanNodeIds = new Set(['start', 'wiki-make', 'skill-attune', 'destructive-check', 'session-plan']);
+const nodeIdPattern = /^[a-zA-Z0-9_-]{1,64}$/;
+const maxImportedNodes = 30;
+const maxNodeTitleLength = 80;
+const maxNodeDescriptionLength = 500;
+
 export const wikiSkills = [
   {
     id: 'wiki-ingest-source',
@@ -150,6 +156,21 @@ export function createInitialState() {
           'Persistence claims require a visible save action and a real file written under .harness-rpg/.',
         ],
       },
+      {
+        id: 'responsive-ui-ux',
+        name: 'Responsive UI/UX Expert Agent',
+        className: 'Breakpoint Experience Specialist',
+        level: 1,
+        xp: 0,
+        profileImage: '',
+        selectedSkills: ['wiki-review-actions', 'wiki-detect-gaps'],
+        agentMd: '# Responsive UI/UX Expert Agent\n\nReviews the app across mobile, tablet, and desktop breakpoints so every surface remains readable, reachable, and emotionally clear.\n\n- Start from the narrowest viewport before approving desktop polish\n- Check navigation, inspector density, graph clipping, and touch target size\n- Convert responsive problems into exact layout and interaction fixes',
+        feedback: [
+          'mobile first: the sidebar, graph, and inspector must collapse without hiding critical controls.',
+          'Every breakpoint needs an obvious next action, readable node ownership, and no clipped graph nodes.',
+          'Touch targets, form fields, and review cards should stay usable before visual ornament gets credit.',
+        ],
+      },
     ],
     activeAgentId: 'wiki-maker',
     skills: wikiSkills,
@@ -270,6 +291,99 @@ export function selectAgent(state, agentId) {
   return { ...state, activeAgentId: agentId };
 }
 
+export function assignAgentToNode(state, nodeId, agentId) {
+  if (!state.agents.some((agent) => agent.id === agentId)) return state;
+  return {
+    ...state,
+    graph: {
+      ...state.graph,
+      nodes: state.graph.nodes.map((nodeItem) => {
+        if (nodeItem.id !== nodeId || nodeItem.agentId === 'System') return nodeItem;
+        const updatedNode = { ...nodeItem, agentId };
+        return {
+          ...updatedNode,
+          review: {
+            ...createReviewBundle(updatedNode, nodeItem.status === 'completed'),
+            ...(nodeItem.review?.summary ? { summary: nodeItem.review.summary } : {}),
+          },
+        };
+      }),
+    },
+  };
+}
+
+export function updateNodeText(state, nodeId, text) {
+  return updateGraphNode(state, nodeId, (nodeItem) => ({
+    ...nodeItem,
+    title: text.title ?? nodeItem.title,
+    description: text.description ?? nodeItem.description,
+  }));
+}
+
+export function buildOuroborosProtocolPayload(state) {
+  const graphSchema = {
+    protocol: 'harness-rpg-war-plan-v1',
+    nodeFields: ['id', 'title', 'description', 'agentId', 'skills', 'status', 'destructive'],
+    edgeShape: { type: 'tuple', items: ['fromNodeId', 'toNodeId'] },
+    protectedNodes: ['start'],
+  };
+  return {
+    protocol: 'harness-rpg-war-plan-v1',
+    prompt: [
+      'You are drafting a war plan for Harness RPG.',
+      'Harness RPG visualizes war plans as graph nodes and edges.',
+      'Match this protocol exactly so the plan can be visualized and edited in the app.',
+      'Return JSON only with protocol, nodes, and edges.',
+      'Do not rename or reassign the protected start node.',
+    ].join('\n'),
+    graphSchema,
+    agents: state.agents.map(({ id, name, className, selectedSkills }) => ({ id, name, className, selectedSkills })),
+    skills: state.skills.map(({ id, name, branch }) => ({ id, name, branch })),
+    currentGraph: {
+      nodes: state.graph.nodes.map((nodeItem) => protocolNode(nodeItem)),
+      edges: state.graph.edges.map((edge) => [...edge]),
+    },
+  };
+}
+
+export function applyWarPlanSpec(state, spec) {
+  const incomingNodes = normalizeSpecNodes(state, spec?.nodes);
+  const existingIds = new Set(state.graph.nodes.map((nodeItem) => nodeItem.id));
+  const agentIds = new Set(state.agents.map((agent) => agent.id));
+  const updatedNodes = state.graph.nodes.map((nodeItem) => {
+    if (nodeItem.agentId === 'System') return nodeItem;
+    const incoming = incomingNodes.find((candidate) => candidate.id === nodeItem.id);
+    if (!incoming) return nodeItem;
+    return specNode(nodeItem, incoming, agentIds);
+  });
+  const addedNodes = incomingNodes
+    .filter((incoming) => incoming.id && !existingIds.has(incoming.id))
+    .map((incoming) => specNode(node(
+      incoming.id,
+      incoming.title ?? incoming.id,
+      agentIds.has(incoming.agentId) ? incoming.agentId : state.activeAgentId,
+      Array.isArray(incoming.skills) ? incoming.skills : [],
+      'idle',
+      incoming.description ?? 'Imported from Ouroboros war-plan spec.',
+      incoming.destructive === true,
+    ), incoming, agentIds));
+  const nodeIds = new Set([...updatedNodes, ...addedNodes].map((nodeItem) => nodeItem.id));
+  const edges = Array.isArray(spec?.edges)
+    ? spec.edges.map((edge) => normalizeSpecEdge(edge)).filter(([from, to]) => nodeIds.has(from) && nodeIds.has(to)).map(([from, to]) => [from, to])
+    : state.graph.edges;
+  const selectedNodeId = addedNodes.at(-1)?.id ?? incomingNodes.find((incoming) => nodeIds.has(incoming.id) && incoming.id !== 'start')?.id ?? state.selectedNodeId;
+
+  return {
+    ...state,
+    selectedNodeId,
+    graph: {
+      ...state.graph,
+      nodes: [...updatedNodes, ...addedNodes],
+      edges,
+    },
+  };
+}
+
 export function getGraphProgress(state) {
   const total = state.graph.nodes.length;
   const completed = state.graph.nodes.filter((nodeItem) => nodeItem.status === 'completed').length;
@@ -285,7 +399,10 @@ export function getWikiSkillPack(state) {
 }
 
 export function addWarPlanNode(state) {
-  const customCount = state.graph.nodes.filter((nodeItem) => nodeItem.id.startsWith('custom-node-')).length + 1;
+  const customCount = Math.max(0, ...state.graph.nodes
+    .filter((nodeItem) => nodeItem.id.startsWith('custom-node-'))
+    .map((nodeItem) => Number(nodeItem.id.replace('custom-node-', '')))
+    .filter(Number.isInteger)) + 1;
   const id = `custom-node-${customCount}`;
   const previousNode = state.graph.nodes.at(-1);
   const newNode = node(
@@ -309,7 +426,7 @@ export function addWarPlanNode(state) {
 }
 
 export function removeWarPlanNode(state, nodeId) {
-  if (nodeId === 'start') return state;
+  if (!canRemoveWarPlanNode(state, nodeId)) return state;
   const targetExists = state.graph.nodes.some((nodeItem) => nodeItem.id === nodeId);
   if (!targetExists) return state;
   const remainingNodes = state.graph.nodes.filter((nodeItem) => nodeItem.id !== nodeId);
@@ -326,9 +443,49 @@ export function removeWarPlanNode(state, nodeId) {
   };
 }
 
+export function canRemoveWarPlanNode(state, nodeId) {
+  return state.graph.nodes.some((nodeItem) => nodeItem.id === nodeId) && !protectedWarPlanNodeIds.has(nodeId);
+}
+
+export function moveWarPlanNode(state, nodeId, position) {
+  const x = Math.round(Number(position?.x ?? 0));
+  const y = Math.round(Number(position?.y ?? 0));
+  return {
+    ...state,
+    selectedNodeId: nodeId,
+    graph: {
+      ...state.graph,
+      nodes: state.graph.nodes.map((nodeItem) => nodeItem.id === nodeId ? { ...nodeItem, position: { x, y } } : nodeItem),
+    },
+  };
+}
+
+export function swapWarPlanNodes(state, sourceNodeId, targetNodeId) {
+  if (sourceNodeId === targetNodeId) return state;
+  const sourceIndex = state.graph.nodes.findIndex((nodeItem) => nodeItem.id === sourceNodeId);
+  const targetIndex = state.graph.nodes.findIndex((nodeItem) => nodeItem.id === targetNodeId);
+  if (sourceIndex === -1 || targetIndex === -1) return state;
+  const nodes = [...state.graph.nodes];
+  const sourceNode = nodes[sourceIndex];
+  const targetNode = nodes[targetIndex];
+  nodes[sourceIndex] = { ...targetNode, position: sourceNode.position ?? targetNode.position };
+  nodes[targetIndex] = { ...sourceNode, position: targetNode.position ?? sourceNode.position };
+  return {
+    ...state,
+    selectedNodeId: sourceNodeId,
+    graph: {
+      ...state.graph,
+      nodes,
+    },
+  };
+}
+
 export function exportWorkspaceFiles(state) {
+  const protocolPayload = buildOuroborosProtocolPayload(state);
   const files = {
     [state.backend.fileState]: `${JSON.stringify(state, null, 2)}\n`,
+    '.harness-rpg/specs/ouroboros-war-plan-protocol.json': `${JSON.stringify(protocolPayload, null, 2)}\n`,
+    '.harness-rpg/specs/ouroboros-war-plan-prompt.md': `${protocolPayload.prompt}\n`,
   };
 
   for (const agent of state.agents) {
@@ -340,6 +497,87 @@ export function exportWorkspaceFiles(state) {
   }
 
   return files;
+}
+
+function updateGraphNode(state, nodeId, updater) {
+  return {
+    ...state,
+    graph: {
+      ...state.graph,
+      nodes: state.graph.nodes.map((nodeItem) => {
+        if (nodeItem.id !== nodeId) return nodeItem;
+        const updatedNode = updater(nodeItem);
+        return refreshNodeReview(updatedNode, nodeItem.review?.summary);
+      }),
+    },
+  };
+}
+
+function refreshNodeReview(nodeItem, summary) {
+  return {
+    ...nodeItem,
+    review: {
+      ...createReviewBundle(nodeItem, nodeItem.status === 'completed'),
+      ...(summary ? { summary } : {}),
+    },
+  };
+}
+
+function specNode(baseNode, incoming, agentIds) {
+  return refreshNodeReview({
+    ...baseNode,
+    title: incoming.title ?? baseNode.title,
+    description: incoming.description ?? baseNode.description,
+    agentId: agentIds.has(incoming.agentId) ? incoming.agentId : baseNode.agentId,
+    skills: Array.isArray(incoming.skills) ? incoming.skills : baseNode.skills,
+    status: 'idle',
+    destructive: incoming.destructive ?? baseNode.destructive,
+    logs: {
+      friendly: 'Waiting for the quest horn.',
+      raw: 'event=node.idle',
+      artifacts: [],
+      why: 'Imported from Ouroboros war-plan spec.',
+    },
+  });
+}
+
+function normalizeSpecNodes(state, nodes) {
+  if (!Array.isArray(nodes)) return [];
+  const seen = new Set();
+  const skillIds = new Set(state.skills.map((skill) => skill.id));
+  return nodes.slice(0, maxImportedNodes).flatMap((nodeItem) => {
+    if (!nodeIdPattern.test(nodeItem?.id ?? '') || seen.has(nodeItem.id)) return [];
+    seen.add(nodeItem.id);
+    return [{
+      ...nodeItem,
+      title: truncateText(nodeItem.title ?? nodeItem.id, maxNodeTitleLength),
+      description: truncateText(nodeItem.description ?? 'Imported from Ouroboros war-plan spec.', maxNodeDescriptionLength),
+      skills: Array.isArray(nodeItem.skills) ? nodeItem.skills.filter((skillId) => skillIds.has(skillId)) : [],
+      destructive: nodeItem.destructive === true,
+    }];
+  });
+}
+
+function normalizeSpecEdge(edge) {
+  if (Array.isArray(edge)) return [String(edge[0] ?? ''), String(edge[1] ?? '')];
+  return [String(edge?.fromNodeId ?? ''), String(edge?.toNodeId ?? '')];
+}
+
+function truncateText(value, maxLength) {
+  return String(value).slice(0, maxLength);
+}
+
+function protocolNode(nodeItem) {
+  return {
+    id: nodeItem.id,
+    title: nodeItem.title,
+    description: nodeItem.description,
+    agentId: nodeItem.agentId,
+    skills: [...nodeItem.skills],
+    status: nodeItem.status,
+    destructive: nodeItem.destructive,
+    review: { ...nodeItem.review },
+  };
 }
 
 export function runGraphUntilBlocked(state) {
@@ -355,9 +593,10 @@ export function runGraphUntilBlocked(state) {
 
 export function startTutorialSession(state) {
   const running = runGraphUntilBlocked(state);
+  const blockedNode = running.graph.nodes.find((nodeItem) => nodeItem.status === 'approval_required');
   return {
     ...running,
-    selectedNodeId: 'wiki-make',
+    selectedNodeId: blockedNode?.id ?? 'wiki-make',
     sessions: running.sessions.map((session) => session.id === running.activeSessionId ? { ...session, status: 'running' } : session),
   };
 }
@@ -463,11 +702,11 @@ function requireApproval(state, nodeId) {
 
 export function approveDestructiveNode(state, nodeId) {
   const approved = completeGraphNode(state, nodeId);
-  const remaining = approved.graph.nodes.slice(approved.graph.nodes.findIndex((nodeItem) => nodeItem.id === nodeId) + 1);
-  const completed = remaining.reduce((currentState, nodeItem) => completeGraphNode(currentState, nodeItem.id), approved);
+  const running = runGraphUntilBlocked(approved);
+  const blockedNode = running.graph.nodes.find((nodeItem) => nodeItem.status === 'approval_required');
   return {
-    ...completed,
-    selectedNodeId: nodeId,
+    ...running,
+    selectedNodeId: blockedNode?.id ?? nodeId,
   };
 }
 
