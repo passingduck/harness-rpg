@@ -4,9 +4,11 @@ import {
   assignSkillToAgent,
   assignAgentToNode,
   canRemoveWarPlanNode,
-  buildOuroborosProtocolPayload,
-  applyWarPlanSpec,
   updateNodeText,
+  buildNodeWorkMarkdown,
+  updateNodeWorkSection,
+  addNodeWorkSection,
+  removeNodeWorkSection,
   updateAgentMarkdown,
   updateAgentProfile,
   setLocale,
@@ -19,6 +21,18 @@ import {
   removeWarPlanNode,
   moveWarPlanNode,
   swapWarPlanNodes,
+  addPoolSkill,
+  addPoolSkillTree,
+  addPoolAgent,
+  addPoolNode,
+  addPoolGraph,
+  assignPoolAgentToNode,
+  togglePoolSkillForAgent,
+  applyPoolSkillTreeToAgent,
+  instantiatePoolNode,
+  applyPoolGraph,
+  removePoolSkill,
+  buildSkillUsageSummary,
   createSession,
   forkSession,
   exportWorkspaceFiles,
@@ -27,9 +41,8 @@ import {
 const STORAGE_KEY = 'harness-rpg-state-v1';
 let state = deserializeState(localStorage.getItem(STORAGE_KEY));
 let exportStatus = '';
-let warPlanSpecText = '';
-let warPlanSpecStatus = '';
 let dragState = null;
+let marketplaceTab = 'agents';
 
 const copy = {
   ko: {
@@ -40,7 +53,10 @@ const copy = {
     agentParty: '에이전트 파티', sessions: '세션', newSession: '새 세션', fork: '포크',
     warPlan: '전쟁 계획 튜토리얼', sessionStart: '세션 시작', approve: '파괴 명령 승인',
     addNode: '노드 추가', removeNode: '선택 노드 제거',
-    ouroborosProtocol: 'Ouroboros 전쟁 계획 프로토콜', ouroborosPrompt: 'Ouroboros에게 보낼 구조 설명', ouroborosSpec: 'Ouroboros Spec JSON', applySpec: 'Spec 적용', specReady: 'Spec 대기 중', specApplied: 'Spec 적용 완료', specFailed: 'Spec 적용 실패',
+    nodeWork: '노드 작업 브리프', nodeWorkHelp: '사용자는 섹션을 편집하고, 에이전트는 아래 markdown을 그대로 읽습니다.', addWorkSection: '섹션 추가', removeWorkSection: '섹션 삭제', sectionTitle: '섹션 이름', sectionBody: '섹션 내용', aiMarkdown: 'AI용 Markdown',
+    nodeSettingsWidget: '노드 설정 위젯', nodeSettingsHelp: '그래프 노드를 누르면 이 큰 위젯에서 담당자, 작업 브리프, 스킬 사용 이유를 한 번에 조정합니다.',
+    pools: '리소스 마켓', poolsHelp: '마켓플레이스처럼 Agent를 노드에 배치하고, 선택 Agent에 Skill/Skill tree를 장착하고, Node/Graph 템플릿을 가져옵니다.', poolSkills: 'Skill', poolSkillTrees: 'Skill Tree', poolAgents: 'Agent', poolNodes: 'Node', poolGraphs: 'Graph', addPoolSkill: 'Skill 추가', addPoolSkillTree: 'Skill tree 추가', addPoolAgent: 'Agent 추가', addPoolNode: 'Node 추가', addPoolGraph: 'Graph 추가', assignToNode: '노드에 배치', equipSkill: 'Agent에 장착', unequipSkill: '장착 해제', deleteSkill: 'Skill 삭제', useNodeTemplate: '노드로 추가', applyGraph: 'Graph 적용', applySkillTree: 'Tree 장착', marketplaceContext: '현재 노드', activeAgentLabel: '선택 Agent', poolPreview: '풀 아이템',
+    skillUsage: '스킬 사용 내역', skillUsageHelp: 'Agent가 어떤 스킬을 왜 썼는지 사용자가 읽기 쉬운 카드로 보여줍니다.', noSkillUsage: '아직 배정된 스킬이 없습니다.', skillReason: '왜 사용했나', skillEvidence: '증거',
     overallProgress: '전체 진행률', clearedNodes: '클리어 노드',
     flow: '흐름: 프로젝트 열기 → 에이전트/스킬 세팅 → Start → wiki-maker agent의 wiki-make → 파괴 명령 승인 게이트.',
     skillTree: 'OpenCode 스킬 트리', selectedAgent: '선택된 에이전트',
@@ -59,7 +75,10 @@ const copy = {
     agentParty: 'Agent Party', sessions: 'Sessions', newSession: 'New Session', fork: 'Fork',
     warPlan: 'War Plan Tutorial', sessionStart: 'Session Start', approve: 'Approve Destructive Command',
     addNode: 'Add Node', removeNode: 'Remove Selected Node',
-    ouroborosProtocol: 'Ouroboros War Plan Protocol', ouroborosPrompt: 'Structure prompt for Ouroboros', ouroborosSpec: 'Ouroboros Spec JSON', applySpec: 'Apply Spec', specReady: 'Waiting for spec', specApplied: 'Spec applied', specFailed: 'Spec apply failed',
+    nodeWork: 'Node Work Brief', nodeWorkHelp: 'Users edit these sections; agents later receive the packed markdown below.', addWorkSection: 'Add Section', removeWorkSection: 'Delete Section', sectionTitle: 'Section title', sectionBody: 'Section body', aiMarkdown: 'AI Markdown',
+    nodeSettingsWidget: 'Node Settings Widget', nodeSettingsHelp: 'Click a graph node to tune owner, work brief, and skill-use rationale in this larger widget.',
+    pools: 'Resource Market', poolsHelp: 'Browse it like a marketplace: assign agents to nodes, equip skills/skill trees to the selected agent, and instantiate node/graph templates.', poolSkills: 'Skill', poolSkillTrees: 'Skill Tree', poolAgents: 'Agent', poolNodes: 'Node', poolGraphs: 'Graph', addPoolSkill: 'Add Skill', addPoolSkillTree: 'Add Skill Tree', addPoolAgent: 'Add Agent', addPoolNode: 'Add Node', addPoolGraph: 'Add Graph', assignToNode: 'Assign to Node', equipSkill: 'Equip Agent', unequipSkill: 'Unequip', deleteSkill: 'Delete Skill', useNodeTemplate: 'Add as Node', applyGraph: 'Apply Graph', applySkillTree: 'Equip Tree', marketplaceContext: 'Current node', activeAgentLabel: 'Selected agent', poolPreview: 'Pool item',
+    skillUsage: 'Skill Usage', skillUsageHelp: 'Shows which skill the agent used and why in user-friendly cards.', noSkillUsage: 'No skills assigned yet.', skillReason: 'Why it was used', skillEvidence: 'Evidence',
     overallProgress: 'Overall Progress', clearedNodes: 'Cleared Nodes',
     flow: 'Flow: project open → agent/skill setup → Start → wiki-make by wiki-maker agent → approval-gated destructive command.',
     skillTree: 'OpenCode Skill Tree', selectedAgent: 'Selected agent',
@@ -206,29 +225,6 @@ function renderGraphProgress() {
   `;
 }
 
-function defaultWarPlanSpecText() {
-  const payload = buildOuroborosProtocolPayload(state);
-  return JSON.stringify({
-    protocol: payload.protocol,
-    nodes: payload.currentGraph.nodes.map(({ id, title, description, agentId, skills, destructive }) => ({ id, title, description, agentId, skills, destructive })),
-    edges: payload.currentGraph.edges,
-  }, null, 2);
-}
-
-function renderOuroborosProtocolPanel() {
-  const payload = buildOuroborosProtocolPayload(state);
-  const specText = warPlanSpecText || defaultWarPlanSpecText();
-  return `
-    <section class="pixel-panel protocol-panel">
-      <h2 class="section-title">${t('ouroborosProtocol')}</h2>
-      <label>${t('ouroborosPrompt')}<textarea id="ouroboros-prompt" class="protocol-textarea" readonly>${esc(`${payload.prompt}\n\n${JSON.stringify(payload.graphSchema, null, 2)}`)}</textarea></label>
-      <label>${t('ouroborosSpec')}<textarea id="ouroboros-spec" class="protocol-textarea">${esc(specText)}</textarea></label>
-      <button id="apply-war-plan-spec" class="secondary">${t('applySpec')}</button>
-      <p class="export-status">${warPlanSpecStatus || t('specReady')}</p>
-    </section>
-  `;
-}
-
 function renderSessions() {
   return state.sessions.map((session) => `
     <li>
@@ -280,6 +276,204 @@ function renderNodeAgentSelect(node) {
       </select>
     </label>
   `;
+}
+
+function renderNodeWorkEditor(node) {
+  const sections = node.workSections ?? [];
+  return `
+    <div class="work-editor">
+      <div class="work-editor-header">
+        <div>
+          <h3>${t('nodeWork')}</h3>
+          <p class="muted">${t('nodeWorkHelp')}</p>
+        </div>
+        <button id="add-work-section" class="secondary">${t('addWorkSection')}</button>
+      </div>
+      <div class="work-section-list">
+        ${sections.map((section) => `
+          <article class="work-section" data-work-section-id="${esc(section.id)}">
+            <label>${t('sectionTitle')}<input class="work-section-title" data-work-section-label="${esc(section.id)}" value="${esc(section.label)}" /></label>
+            <label>${t('sectionBody')}<textarea class="work-section-body" data-work-section-body="${esc(section.id)}">${esc(section.body)}</textarea></label>
+            <button class="secondary work-section-remove" data-remove-work-section="${esc(section.id)}">${t('removeWorkSection')}</button>
+          </article>
+        `).join('')}
+      </div>
+      <label>${t('aiMarkdown')}<textarea id="node-work-markdown" class="node-work-markdown" readonly>${esc(buildNodeWorkMarkdown(state, node.id))}</textarea></label>
+    </div>
+  `;
+}
+
+function renderSkillUsage(node) {
+  const entries = buildSkillUsageSummary(state, node.id);
+  return `
+    <div class="skill-usage" aria-label="${t('skillUsage')}">
+      <div class="skill-usage-header">
+        <h3>${t('skillUsage')}</h3>
+        <p class="muted">${t('skillUsageHelp')}</p>
+      </div>
+      <div class="skill-usage-grid">
+        ${entries.length ? entries.map((entry) => `
+          <article class="skill-usage-card">
+            <strong>${esc(entry.skillName)}</strong>
+            <span>${esc(entry.agentName)} · ${esc(entry.skillId)}</span>
+            <dl>
+              <dt>${t('skillReason')}</dt><dd>${esc(entry.reason)}</dd>
+              <dt>${t('skillEvidence')}</dt><dd>${esc(entry.evidence)}</dd>
+            </dl>
+          </article>
+        `).join('') : `<p class="muted">${t('noSkillUsage')}</p>`}
+      </div>
+    </div>
+  `;
+}
+
+function renderNodeSettingsWidget(node) {
+  return `
+    <section class="pixel-panel node-settings-widget" aria-label="${t('nodeSettingsWidget')}">
+      <div class="widget-heading">
+        <div>
+          <h2 class="section-title">${t('nodeSettingsWidget')}</h2>
+          <p class="muted">${t('nodeSettingsHelp')}</p>
+        </div>
+        <div class="node-status-badge ${esc(node.status)}">${esc(statusLabel(node.status))}</div>
+      </div>
+      <div class="node-settings-grid">
+        <div class="node-settings-main">
+          <label>${t('nodeTitle')}<input id="node-title" value="${esc(node.title)}" /></label>
+          <label>${t('nodeDescription')}<textarea id="node-description" class="node-textarea">${esc(node.description)}</textarea></label>
+          ${renderNodeAgentSelect(node)}
+          ${renderNodeWorkEditor(node)}
+        </div>
+        <div class="node-settings-side">
+          <h3 id="node-title-heading">${esc(node.title)}</h3>
+          <p id="node-description-preview">${esc(node.description)}</p>
+          <p><strong>${t('usedSkills')}:</strong> ${esc(node.skills.join(', ') || 'none')}</p>
+          ${renderSkillUsage(node)}
+          <h2 class="section-title review-title">${t('reviewCenter')}</h2>
+          ${renderReviewCenter(node)}
+          <h4>${t('friendlyLog')}</h4>
+          <div class="log-box">${esc(node.logs.friendly)}</div>
+          <h4>${t('rawLog')}</h4>
+          <div class="log-box">${esc(node.logs.raw)}</div>
+          <h4>${t('whyUsed')}</h4>
+          <div class="log-box">${esc(node.logs.why)}</div>
+          <h4>${t('artifacts')}</h4>
+          <ul>${node.logs.artifacts.map((artifact) => `<li class="artifact">${esc(artifact)}</li>`).join('')}</ul>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderPoolPanel() {
+  const pools = state.pools ?? { skills: state.skills, skillTrees: [], agents: state.agents, nodes: state.graph.nodes, graphs: [] };
+  const node = selectedNode();
+  const agent = activeAgent();
+  const tabs = [
+    ['agents', 'poolAgents', pools.agents.length],
+    ['skills', 'poolSkills', pools.skills.length],
+    ['skillTrees', 'poolSkillTrees', pools.skillTrees.length],
+    ['nodes', 'poolNodes', pools.nodes.length],
+    ['graphs', 'poolGraphs', pools.graphs.length],
+  ];
+  return `
+    <section class="pixel-panel pool-panel marketplace-panel">
+      <h2 class="section-title">${t('pools')}</h2>
+      <p class="muted">${t('poolsHelp')}</p>
+      <div class="market-context">
+        <span>${t('marketplaceContext')}: <strong>${esc(node.title)}</strong></span>
+        <span>${t('activeAgentLabel')}: <strong>${esc(agent.name)}</strong></span>
+      </div>
+      <div class="market-tabs" role="tablist">
+        ${tabs.map(([tab, labelKey, count]) => `
+          <button class="market-tab ${marketplaceTab === tab ? 'active' : ''}" data-market-tab="${tab}" aria-pressed="${marketplaceTab === tab}">${t(labelKey)} <span>${count}</span></button>
+        `).join('')}
+      </div>
+      <div class="market-actions">
+        <button id="add-pool-agent" class="secondary">${t('addPoolAgent')}</button>
+        <button id="add-pool-skill" class="secondary">${t('addPoolSkill')}</button>
+        <button id="add-pool-skill-tree" class="secondary">${t('addPoolSkillTree')}</button>
+        <button id="add-pool-node" class="secondary">${t('addPoolNode')}</button>
+        <button id="add-pool-graph" class="secondary">${t('addPoolGraph')}</button>
+      </div>
+      ${renderMarketplaceShelf(pools, node, agent)}
+    </section>
+  `;
+}
+
+function renderMarketplaceShelf(pools, node, agent) {
+  if (marketplaceTab === 'skills') return renderSkillMarketplace(pools.skills, node, agent);
+  if (marketplaceTab === 'skillTrees') return renderSkillTreeMarketplace(pools.skillTrees, agent);
+  if (marketplaceTab === 'nodes') return renderNodeMarketplace(pools.nodes);
+  if (marketplaceTab === 'graphs') return renderGraphMarketplace(pools.graphs);
+  return renderAgentMarketplace(pools.agents, node);
+}
+
+function renderAgentMarketplace(agents, node) {
+  return `<div class="market-grid">${agents.map((agent) => `
+    <article class="market-card ${agent.id === node.agentId ? 'chosen' : ''}">
+      <small>${t('poolPreview')}</small>
+      <h3>${esc(agent.name)}</h3>
+      <p>${esc(agent.className)}</p>
+      <p class="muted">${esc((agent.selectedSkills ?? []).join(', ') || 'no skills')}</p>
+      <button class="secondary" data-assign-pool-agent="${esc(agent.id)}">${t('assignToNode')}</button>
+    </article>
+  `).join('')}</div>`;
+}
+
+function renderSkillMarketplace(skills, node, agent) {
+  return `<div class="market-grid">${skills.map((skill) => {
+    const equipped = agent.selectedSkills.includes(skill.id);
+    const nodeUsesSkill = node.skills.includes(skill.id);
+    return `
+      <article class="market-card ${equipped ? 'chosen' : ''}">
+        <small>${esc(skill.branch)}</small>
+        <h3>${esc(skill.name)}</h3>
+        <p>${esc(skill.markdown.split('\n\n')[1] ?? '')}</p>
+        <p class="muted">${nodeUsesSkill ? `${esc(node.title)} uses this skill` : `${esc(agent.name)} ${equipped ? 'has this skill' : 'can equip this skill'}`}</p>
+        <div class="market-card-actions">
+          <button class="secondary" data-toggle-pool-skill="${esc(skill.id)}">${equipped ? t('unequipSkill') : t('equipSkill')}</button>
+          <button class="secondary danger" data-delete-pool-skill="${esc(skill.id)}">${t('deleteSkill')}</button>
+        </div>
+      </article>
+    `;
+  }).join('')}</div>`;
+}
+
+function renderSkillTreeMarketplace(skillTrees, agent) {
+  return `<div class="market-grid">${skillTrees.map((tree) => `
+    <article class="market-card">
+      <small>${tree.skillIds.length} skills</small>
+      <h3>${esc(tree.name)}</h3>
+      <p>${esc(tree.description)}</p>
+      <p class="muted">${esc(tree.skillIds.slice(0, 5).join(', '))}${tree.skillIds.length > 5 ? '…' : ''}</p>
+      <button class="secondary" data-apply-pool-skill-tree="${esc(tree.id)}">${t('applySkillTree')} → ${esc(agent.name)}</button>
+    </article>
+  `).join('')}</div>`;
+}
+
+function renderNodeMarketplace(nodes) {
+  return `<div class="market-grid">${nodes.map((nodeTemplate) => `
+    <article class="market-card">
+      <small>${esc(nodeTemplate.agentId)}</small>
+      <h3>${esc(nodeTemplate.title)}</h3>
+      <p>${esc(nodeTemplate.description)}</p>
+      <p class="muted">${esc((nodeTemplate.skills ?? []).join(', ') || 'no skills')}</p>
+      <button class="secondary" data-instantiate-pool-node="${esc(nodeTemplate.id)}">${t('useNodeTemplate')}</button>
+    </article>
+  `).join('')}</div>`;
+}
+
+function renderGraphMarketplace(graphs) {
+  return `<div class="market-grid">${graphs.map((graph) => `
+    <article class="market-card">
+      <small>${graph.nodeIds.length} nodes · ${graph.edges.length} edges</small>
+      <h3>${esc(graph.name)}</h3>
+      <p>${esc(graph.description)}</p>
+      <p class="muted">${esc(graph.nodeIds.slice(0, 5).join(' → '))}${graph.nodeIds.length > 5 ? '…' : ''}</p>
+      <button class="secondary" data-apply-pool-graph="${esc(graph.id)}">${t('applyGraph')}</button>
+    </article>
+  `).join('')}</div>`;
 }
 
 function renderBackendPanel() {
@@ -353,12 +547,13 @@ function render() {
           </div>
           <div class="graph" aria-label="Diablo-style war plan graph">${renderGraph()}</div>
         </section>
-        ${renderOuroborosProtocolPanel()}
+        ${renderNodeSettingsWidget(node)}
         <section class="pixel-panel">
           <h2 class="section-title">${t('skillTree')}</h2>
           <p class="muted">${t('skillHelp')} ${t('selectedAgent')}: <strong>${esc(agent.name)}</strong></p>
           <div class="skills">${renderSkills(agent)}</div>
         </section>
+        ${renderPoolPanel()}
         <section class="pixel-panel">
           <h2 class="section-title">${t('wikiMap')}</h2>
           <p class="muted">${t('wikiHelp')}</p>
@@ -377,26 +572,6 @@ function render() {
           <textarea id="agent-md" aria-label="Agent.md editor">${esc(agent.agentMd)}</textarea>
           ${agent.feedback ? `<h2 class="section-title">${t('feedback')}</h2><ul class="feedback-list">${agent.feedback.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>` : ''}
         </section>
-        <section class="pixel-panel">
-          <h2 class="section-title">${t('nodeDetail')}</h2>
-          <label>${t('nodeTitle')}<input id="node-title" value="${esc(node.title)}" /></label>
-          <label>${t('nodeDescription')}<textarea id="node-description" class="node-textarea">${esc(node.description)}</textarea></label>
-          <h3 id="node-title-heading">${esc(node.title)}</h3>
-          <p id="node-description-preview">${esc(node.description)}</p>
-          <p><strong>${t('status')}:</strong> ${statusLabel(node.status)}</p>
-          ${renderNodeAgentSelect(node)}
-          <p><strong>${t('usedSkills')}:</strong> ${esc(node.skills.join(', ') || 'none')}</p>
-          <h2 class="section-title review-title">${t('reviewCenter')}</h2>
-          ${renderReviewCenter(node)}
-          <h4>${t('friendlyLog')}</h4>
-          <div class="log-box">${esc(node.logs.friendly)}</div>
-          <h4>${t('rawLog')}</h4>
-          <div class="log-box">${esc(node.logs.raw)}</div>
-          <h4>${t('whyUsed')}</h4>
-          <div class="log-box">${esc(node.logs.why)}</div>
-          <h4>${t('artifacts')}</h4>
-          <ul>${node.logs.artifacts.map((artifact) => `<li class="artifact">${esc(artifact)}</li>`).join('')}</ul>
-        </section>
       </aside>
     </div>
   `;
@@ -411,6 +586,21 @@ function bindEvents() {
   document.querySelector('#add-node')?.addEventListener('click', () => save(addWarPlanNode(state)));
   document.querySelector('#remove-node')?.addEventListener('click', () => save(removeWarPlanNode(state, state.selectedNodeId)));
   document.querySelector('#approve-node')?.addEventListener('click', () => save(approveDestructiveNode(state, state.selectedNodeId)));
+  document.querySelector('#add-pool-skill')?.addEventListener('click', () => save(addPoolSkill(state)));
+  document.querySelector('#add-pool-skill-tree')?.addEventListener('click', () => save(addPoolSkillTree(state)));
+  document.querySelector('#add-pool-agent')?.addEventListener('click', () => save(addPoolAgent(state)));
+  document.querySelector('#add-pool-node')?.addEventListener('click', () => save(addPoolNode(state)));
+  document.querySelector('#add-pool-graph')?.addEventListener('click', () => save(addPoolGraph(state)));
+  document.querySelectorAll('[data-market-tab]').forEach((element) => element.addEventListener('click', () => {
+    marketplaceTab = element.dataset.marketTab;
+    render();
+  }));
+  document.querySelectorAll('[data-assign-pool-agent]').forEach((element) => element.addEventListener('click', () => save(assignPoolAgentToNode(state, state.selectedNodeId, element.dataset.assignPoolAgent))));
+  document.querySelectorAll('[data-toggle-pool-skill]').forEach((element) => element.addEventListener('click', () => save(togglePoolSkillForAgent(state, state.activeAgentId, element.dataset.togglePoolSkill, state.selectedNodeId))));
+  document.querySelectorAll('[data-delete-pool-skill]').forEach((element) => element.addEventListener('click', () => save(removePoolSkill(state, element.dataset.deletePoolSkill))));
+  document.querySelectorAll('[data-apply-pool-skill-tree]').forEach((element) => element.addEventListener('click', () => save(applyPoolSkillTreeToAgent(state, state.activeAgentId, element.dataset.applyPoolSkillTree, state.selectedNodeId))));
+  document.querySelectorAll('[data-instantiate-pool-node]').forEach((element) => element.addEventListener('click', () => save(instantiatePoolNode(state, element.dataset.instantiatePoolNode))));
+  document.querySelectorAll('[data-apply-pool-graph]').forEach((element) => element.addEventListener('click', () => save(applyPoolGraph(state, element.dataset.applyPoolGraph))));
   document.querySelector('#new-session')?.addEventListener('click', () => save(createSession(state)));
   document.querySelector('#agent-name')?.addEventListener('input', (event) => updateDraft(updateAgentProfile(state, state.activeAgentId, { name: event.target.value })));
   document.querySelector('#profile-image')?.addEventListener('input', (event) => updateDraft(updateAgentProfile(state, state.activeAgentId, { profileImage: event.target.value })));
@@ -418,15 +608,23 @@ function bindEvents() {
   document.querySelector('#node-title')?.addEventListener('input', (event) => {
     updateDraft(updateNodeText(state, state.selectedNodeId, { title: event.target.value }));
     syncSelectedNodeTextPreview(event.target.value, state.graph.nodes.find((node) => node.id === state.selectedNodeId)?.description ?? '');
+    syncNodeWorkMarkdownPreview();
   });
   document.querySelector('#node-description')?.addEventListener('input', (event) => {
     updateDraft(updateNodeText(state, state.selectedNodeId, { description: event.target.value }));
     syncSelectedNodeTextPreview(state.graph.nodes.find((node) => node.id === state.selectedNodeId)?.title ?? '', event.target.value);
+    syncNodeWorkMarkdownPreview();
   });
-  document.querySelector('#ouroboros-spec')?.addEventListener('input', (event) => {
-    warPlanSpecText = event.target.value;
-  });
-  document.querySelector('#apply-war-plan-spec')?.addEventListener('click', applyWarPlanSpecFromEditor);
+  document.querySelector('#add-work-section')?.addEventListener('click', () => save(addNodeWorkSection(state, state.selectedNodeId)));
+  document.querySelectorAll('[data-remove-work-section]').forEach((element) => element.addEventListener('click', () => save(removeNodeWorkSection(state, state.selectedNodeId, element.dataset.removeWorkSection))));
+  document.querySelectorAll('[data-work-section-label]').forEach((element) => element.addEventListener('input', (event) => {
+    updateDraft(updateNodeWorkSection(state, state.selectedNodeId, element.dataset.workSectionLabel, { label: event.target.value }));
+    syncNodeWorkMarkdownPreview();
+  }));
+  document.querySelectorAll('[data-work-section-body]').forEach((element) => element.addEventListener('input', (event) => {
+    updateDraft(updateNodeWorkSection(state, state.selectedNodeId, element.dataset.workSectionBody, { body: event.target.value }));
+    syncNodeWorkMarkdownPreview();
+  }));
   document.querySelector('#node-agent')?.addEventListener('change', (event) => save(assignAgentToNode(state, state.selectedNodeId, event.target.value)));
   document.querySelectorAll('[data-agent-id]').forEach((element) => element.addEventListener('click', () => save(selectAgent(state, element.dataset.agentId))));
   document.querySelectorAll('[data-skill-id]').forEach((element) => element.addEventListener('click', () => save(assignSkillToAgent(state, state.activeAgentId, element.dataset.skillId))));
@@ -506,15 +704,9 @@ function syncSelectedNodeTextPreview(title, description) {
   if (preview) preview.textContent = description;
 }
 
-function applyWarPlanSpecFromEditor() {
-  try {
-    const spec = JSON.parse(warPlanSpecText || defaultWarPlanSpecText());
-    warPlanSpecStatus = t('specApplied');
-    save(applyWarPlanSpec(state, spec));
-  } catch (error) {
-    warPlanSpecStatus = `${t('specFailed')}: ${error.message}`;
-    render();
-  }
+function syncNodeWorkMarkdownPreview() {
+  const preview = document.querySelector('#node-work-markdown');
+  if (preview) preview.value = buildNodeWorkMarkdown(state, state.selectedNodeId);
 }
 
 async function exportWorkspaceToFiles() {
