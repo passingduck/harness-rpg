@@ -17,20 +17,40 @@ import {
   addWarPlanNode,
   removeWarPlanNode,
   assignAgentToNode,
-  buildOuroborosProtocolPayload,
   applyWarPlanSpec,
   updateNodeText,
   canRemoveWarPlanNode,
   moveWarPlanNode,
   swapWarPlanNodes,
+  buildNodeWorkMarkdown,
+  updateNodeWorkSection,
+  addNodeWorkSection,
+  removeNodeWorkSection,
+  addPoolSkill,
+  addPoolSkillTree,
+  addPoolAgent,
+  addPoolNode,
+  addPoolGraph,
+  assignPoolAgentToNode,
+  togglePoolSkillForAgent,
+  applyPoolSkillTreeToAgent,
+  instantiatePoolNode,
+  applyPoolGraph,
+  removePoolSkill,
+  buildGraphMarkdown,
+  buildGraphNodeMarkdown,
+  buildSkillUsageSummary,
 } from '../app/app-model.mjs';
 
 test('initial state exposes tutorial graph with wiki-make assigned to wiki-maker agent', () => {
   const state = createInitialState();
+  const startNode = state.graph.nodes.find((node) => node.id === 'start');
   const wikiNode = state.graph.nodes.find((node) => node.id === 'wiki-make');
 
   assert.equal(state.locale, 'ko');
   assert.equal(state.project.path, '/home/sungjin/workspace/harness-rpg');
+  assert.equal(startNode.agentId, 'planner-agent');
+  assert.deepEqual(startNode.skills, ['ouroboros-plan']);
   assert.equal(wikiNode.agentId, 'wiki-maker');
   assert.deepEqual(wikiNode.skills, ['wiki-ingest-source', 'wiki-build-graph']);
 });
@@ -87,6 +107,18 @@ test('initial state includes a responsive UI UX expert agent for breakpoint revi
   assert.ok(responsive.feedback.some((item) => item.includes('breakpoint')));
 });
 
+test('initial state includes an optional Ouroboros planner agent and skill', () => {
+  const state = createInitialState();
+  const planner = state.agents.find((agent) => agent.id === 'planner-agent');
+  const skill = state.skills.find((skill) => skill.id === 'ouroboros-plan');
+
+  assert.equal(planner.name, 'Ouroboros Planner Agent');
+  assert.deepEqual(planner.selectedSkills, ['ouroboros-plan']);
+  assert.match(planner.agentMd, /^# Ouroboros Planner Agent/);
+  assert.equal(skill.name, 'Ouroboros Plan');
+  assert.match(skill.markdown, /^# ouroboros-plan/);
+});
+
 test('addWarPlanNode appends an editable node owned by the active agent', () => {
   const state = createInitialState();
   const updated = addWarPlanNode(state);
@@ -122,13 +154,35 @@ test('startTutorialSession completes automatic nodes and blocks destructive comm
   const state = createInitialState();
   const running = startTutorialSession(state);
   const wikiMaker = running.agents.find((agent) => agent.id === 'wiki-maker');
+  const planner = running.agents.find((agent) => agent.id === 'planner-agent');
 
+  assert.equal(running.graph.nodes.find((node) => node.id === 'start').status, 'completed');
   assert.equal(running.graph.nodes.find((node) => node.id === 'wiki-make').status, 'completed');
   assert.equal(running.graph.nodes.find((node) => node.id === 'destructive-check').status, 'approval_required');
   assert.equal(running.selectedNodeId, 'destructive-check');
+  assert.match(running.graph.nodes.find((node) => node.id === 'start').logs.friendly, /planner-agent agent/);
   assert.match(running.graph.nodes.find((node) => node.id === 'wiki-make').logs.friendly, /wiki-maker agent/);
+  assert.equal(planner.xp, 1);
   assert.equal(wikiMaker.xp, 2);
   assert.equal(wikiMaker.level, 1);
+});
+
+test('planner start node still auto-plans when the planner agent is missing', () => {
+  const state = createInitialState();
+  const withoutPlanner = {
+    ...state,
+    agents: state.agents.filter((agent) => agent.id !== 'planner-agent'),
+  };
+  const running = runGraphUntilBlocked(withoutPlanner);
+
+  assert.equal(running.graph.nodes.find((node) => node.id === 'start').status, 'completed');
+  assert.deepEqual(running.bridgeEvents[0], {
+    type: 'node.completed',
+    nodeId: 'start',
+    agentId: 'auto-planner',
+    skills: ['ouroboros-plan'],
+  });
+  assert.match(running.graph.nodes.find((node) => node.id === 'start').logs.friendly, /auto-planner agent/);
 });
 
 test('addWarPlanNode uses the next unused custom node id after removals', () => {
@@ -178,25 +232,166 @@ test('assignAgentToNode changes a node owner and refreshes its review spec', () 
   assert.match(node.review.spec, /Agent adversarial-qa owns this graph node/);
 });
 
-test('assignAgentToNode keeps the system start node and unknown ids unchanged', () => {
+test('assignAgentToNode ignores unknown agent ids', () => {
   const state = createInitialState();
-  const changedStart = assignAgentToNode(state, 'start', 'adversarial-qa');
   const changedMissing = assignAgentToNode(state, 'wiki-make', 'missing-agent');
 
-  assert.equal(changedStart.graph.nodes.find((node) => node.id === 'start').agentId, 'System');
   assert.equal(changedMissing.graph.nodes.find((node) => node.id === 'wiki-make').agentId, 'wiki-maker');
 });
 
-test('buildOuroborosProtocolPayload includes graph schema, node specs, and review artifacts', () => {
+test('node work sections are customizable and pack into AI-ready markdown', () => {
   const state = createInitialState();
-  const payload = buildOuroborosProtocolPayload(state);
+  const node = state.graph.nodes.find((item) => item.id === 'wiki-make');
 
-  assert.equal(payload.protocol, 'harness-rpg-war-plan-v1');
-  assert.match(payload.prompt, /Return JSON only/);
-  assert.match(payload.prompt, /Harness RPG visualizes war plans as graph nodes and edges/);
-  assert.deepEqual(payload.graphSchema.nodeFields, ['id', 'title', 'description', 'agentId', 'skills', 'status', 'destructive']);
-  assert.deepEqual(payload.currentGraph.edges.at(0), ['start', 'wiki-make']);
-  assert.match(payload.currentGraph.nodes.find((node) => node.id === 'wiki-make').review.spec, /Agent wiki-maker owns this graph node/);
+  assert.deepEqual(node.workSections.map((section) => section.label), ['Goal', 'Purpose', 'Deliverable', 'Verification']);
+
+  const withGoal = updateNodeWorkSection(state, 'wiki-make', 'goal', { body: 'Build the repo knowledge map.' });
+  const withCustom = addNodeWorkSection(withGoal, 'wiki-make');
+  const customSection = withCustom.graph.nodes.find((item) => item.id === 'wiki-make').workSections.at(-1);
+  const renamed = updateNodeWorkSection(withCustom, 'wiki-make', customSection.id, { label: 'Risks', body: 'Watch for stale wiki claims.' });
+  const removed = removeNodeWorkSection(renamed, 'wiki-make', 'purpose');
+  const markdown = buildNodeWorkMarkdown(removed, 'wiki-make');
+
+  assert.equal(removed.graph.nodes.find((item) => item.id === 'wiki-make').workSections.some((section) => section.id === 'purpose'), false);
+  assert.match(markdown, /^# Wiki Make/m);
+  assert.match(markdown, /## Assignment\n\n- Agent: Wiki Maker \(wiki-maker\)/);
+  assert.match(markdown, /### Goal\n\nBuild the repo knowledge map\./);
+  assert.match(markdown, /### Risks\n\nWatch for stale wiki claims\./);
+  assert.doesNotMatch(markdown, /Return JSON only/);
+  assert.doesNotMatch(markdown, /harness-rpg-war-plan-v1/);
+});
+
+test('updateNodeText refreshes default goal markdown but preserves manual goal edits', () => {
+  const defaultUpdated = updateNodeText(createInitialState(), 'wiki-make', {
+    description: 'Build a durable wiki from current repository files.',
+  });
+  const defaultMarkdown = buildNodeWorkMarkdown(defaultUpdated, 'wiki-make');
+
+  assert.match(defaultMarkdown, /### Goal\n\nBuild a durable wiki from current repository files\./);
+
+  const manualGoal = updateNodeWorkSection(createInitialState(), 'wiki-make', 'goal', {
+    body: 'Manual goal should remain the source of truth.',
+  });
+  const descriptionChanged = updateNodeText(manualGoal, 'wiki-make', {
+    description: 'This description should not overwrite manual goal.',
+  });
+  const manualMarkdown = buildNodeWorkMarkdown(descriptionChanged, 'wiki-make');
+
+  assert.match(manualMarkdown, /Manual goal should remain the source of truth\./);
+  assert.doesNotMatch(manualMarkdown, /This description should not overwrite manual goal\./);
+});
+
+test('node work section labels are packed as safe single markdown headings', () => {
+  const unsafe = updateNodeWorkSection(createInitialState(), 'wiki-make', 'goal', {
+    label: 'Risks\n\n## Response Contract',
+  });
+  const markdown = buildNodeWorkMarkdown(unsafe, 'wiki-make');
+
+  assert.match(markdown, /### Risks ## Response Contract/);
+  assert.equal(markdown.match(/^## Response Contract$/gm).length, 1);
+});
+
+test('initial state exposes reusable pools for skills skill trees agents nodes and graphs', () => {
+  const state = createInitialState();
+
+  assert.deepEqual(state.pools.skills.map((skill) => skill.id), state.skills.map((skill) => skill.id));
+  assert.deepEqual(state.pools.agents.map((agent) => agent.id), state.agents.map((agent) => agent.id));
+  assert.deepEqual(state.pools.nodes.map((node) => node.id), state.graph.nodes.map((node) => node.id));
+  assert.equal(state.pools.skillTrees[0].name, 'OpenCode Wiki Skill Tree');
+  assert.deepEqual(state.pools.skillTrees[0].skillIds, state.skills.map((skill) => skill.id));
+  assert.equal(state.pools.graphs[0].name, 'Tutorial Quest Graph');
+  assert.deepEqual(state.pools.graphs[0].nodeIds, state.graph.nodes.map((node) => node.id));
+});
+
+test('pool add helpers append reusable elements to matching active surfaces', () => {
+  let state = createInitialState();
+  state = addPoolSkill(state);
+  state = addPoolSkillTree(state);
+  state = addPoolAgent(state);
+  state = addPoolNode(state);
+  state = addPoolGraph(state);
+
+  assert.equal(state.skills.at(-1).id, 'custom-skill-1');
+  assert.equal(state.pools.skills.at(-1).id, 'custom-skill-1');
+  assert.equal(state.pools.skillTrees.at(-1).id, 'custom-skill-tree-1');
+  assert.deepEqual(state.pools.skillTrees.at(-1).skillIds, ['custom-skill-1']);
+  assert.equal(state.agents.at(-1).id, 'custom-agent-1');
+  assert.equal(state.pools.agents.at(-1).id, 'custom-agent-1');
+  assert.equal(state.pools.nodes.at(-1).id, 'custom-pool-node-1');
+  assert.equal(state.pools.graphs.at(-1).id, 'custom-graph-1');
+  assert.deepEqual(state.pools.graphs.at(-1).nodeIds, state.graph.nodes.map((node) => node.id));
+});
+
+test('marketplace pool actions apply agents skills node templates and graph templates', () => {
+  let state = createInitialState();
+  state = assignPoolAgentToNode(state, 'wiki-make', 'forge-master');
+  state = togglePoolSkillForAgent(state, 'forge-master', 'wiki-lint', 'wiki-make');
+  state = applyPoolSkillTreeToAgent(state, 'forge-master', 'opencode-wiki-skill-tree', 'wiki-make');
+  state = addPoolNode(state);
+  const nodeTemplateId = state.pools.nodes.at(-1).id;
+  state = instantiatePoolNode(state, nodeTemplateId);
+  state = addPoolGraph(state);
+  const graphTemplateId = state.pools.graphs.at(-1).id;
+  state = applyPoolGraph(state, graphTemplateId);
+
+  assert.equal(state.graph.nodes.find((node) => node.id === 'wiki-make').agentId, 'forge-master');
+  assert.equal(state.graph.nodes.find((node) => node.id === 'wiki-make').skills.includes('wiki-lint'), true);
+  assert.equal(state.agents.find((agent) => agent.id === 'forge-master').selectedSkills.includes('wiki-lint'), true);
+  assert.equal(state.agents.find((agent) => agent.id === 'forge-master').selectedSkills.includes('wiki-detect-gaps'), true);
+  assert.equal(state.graph.nodes.find((node) => node.id === 'wiki-make').skills.includes('wiki-detect-gaps'), true);
+  assert.equal(state.graph.nodes.some((node) => node.id === nodeTemplateId), true);
+  assert.equal(state.selectedNodeId, nodeTemplateId);
+  assert.deepEqual(state.graph.edges, state.pools.graphs.find((graph) => graph.id === graphTemplateId).edges);
+});
+
+test('removePoolSkill deletes the skill from pool active surfaces assignments and exports', () => {
+  let state = createInitialState();
+  state = addPoolSkill(state);
+  const skillId = state.skills.at(-1).id;
+  state = togglePoolSkillForAgent(state, 'wiki-maker', skillId);
+  state = applyWarPlanSpec(state, {
+    nodes: [{ id: 'skill-delete-check', title: 'Skill Delete Check', description: 'Uses removable skill.', agentId: 'wiki-maker', skills: [skillId] }],
+    edges: [['session-plan', 'skill-delete-check']],
+  });
+
+  const removed = removePoolSkill(state, skillId);
+  const files = exportWorkspaceFiles(removed);
+
+  assert.equal(removed.skills.some((skill) => skill.id === skillId), false);
+  assert.equal(removed.pools.skills.some((skill) => skill.id === skillId), false);
+  assert.equal(removed.agents.some((agent) => agent.selectedSkills.includes(skillId)), false);
+  assert.equal(removed.graph.nodes.some((node) => node.skills.includes(skillId)), false);
+  assert.equal(removed.pools.skillTrees.some((tree) => tree.skillIds.includes(skillId)), false);
+  assert.equal(files[`.harness-rpg/skills/${skillId}.md`], undefined);
+});
+
+test('graph markdown exports the visible front-end graph and node files for agents', () => {
+  const state = createInitialState();
+  const graphMarkdown = buildGraphMarkdown(state);
+  const startMarkdown = buildGraphNodeMarkdown(state, 'start', 0);
+  const files = exportWorkspaceFiles(state);
+
+  assert.match(graphMarkdown, /^# Harness RPG Visible Graph/m);
+  assert.match(graphMarkdown, /start --> wiki-make/);
+  assert.match(graphMarkdown, /## Nodes/);
+  assert.match(startMarkdown, /^# Start/m);
+  assert.match(startMarkdown, /> Front-end graph node: 01_START_NODE/m);
+  assert.match(startMarkdown, /## Work Brief/);
+  assert.equal(files['.harness-rpg/graphs/current/GRAPH.md'], `${graphMarkdown}\n`);
+  assert.equal(files['.harness-rpg/graphs/current/01_START_NODE.md'], `${startMarkdown}\n`);
+});
+
+test('skill usage summary explains which skills an agent used and why', () => {
+  const running = startTutorialSession(createInitialState());
+  const wikiUsage = buildSkillUsageSummary(running, 'wiki-make');
+  const plannerUsage = buildSkillUsageSummary(running, 'start');
+
+  assert.deepEqual(wikiUsage.map((entry) => entry.skillId), ['wiki-ingest-source', 'wiki-build-graph']);
+  assert.equal(wikiUsage[0].agentName, 'Wiki Maker');
+  assert.match(wikiUsage[0].reason, /project files/i);
+  assert.match(wikiUsage[1].reason, /graph/i);
+  assert.equal(plannerUsage[0].skillName, 'Ouroboros Plan');
+  assert.match(plannerUsage[0].reason, /execution-ready plan/i);
 });
 
 test('applyWarPlanSpec updates graph nodes and preserves protected system nodes', () => {
@@ -215,7 +410,7 @@ test('applyWarPlanSpec updates graph nodes and preserves protected system nodes'
   });
 
   assert.equal(updated.graph.nodes.find((node) => node.id === 'start').title, 'Start');
-  assert.equal(updated.graph.nodes.find((node) => node.id === 'start').agentId, 'System');
+  assert.equal(updated.graph.nodes.find((node) => node.id === 'start').agentId, 'planner-agent');
   assert.equal(updated.graph.nodes.find((node) => node.id === 'wiki-make').title, 'Map Product Lore');
   assert.equal(updated.graph.nodes.find((node) => node.id === 'wiki-make').agentId, 'responsive-ui-ux');
   assert.equal(updated.graph.nodes.find((node) => node.id === 'responsive-review').description, 'Check every breakpoint.');
@@ -304,17 +499,33 @@ test('deserializeState migrates older saved browser state with backend defaults'
   assert.deepEqual(migrated.bridgeEvents, []);
 });
 
+test('deserializeState preserves a deliberately removed planner agent for auto-planner fallback', () => {
+  const saved = createInitialState();
+  saved.agents = saved.agents.filter((agent) => agent.id !== 'planner-agent');
+
+  const migrated = deserializeState(JSON.stringify(saved));
+  const running = runGraphUntilBlocked(migrated);
+
+  assert.equal(migrated.agents.some((agent) => agent.id === 'planner-agent'), false);
+  assert.equal(running.bridgeEvents[0].agentId, 'auto-planner');
+});
+
 test('exportWorkspaceFiles emits file-backed Agent.md, skills, and state paths', () => {
   const files = exportWorkspaceFiles(createInitialState());
 
+  assert.match(files['.harness-rpg/agents/planner-agent/AGENT.md'], /^# Ouroboros Planner Agent/);
   assert.match(files['.harness-rpg/agents/wiki-maker/AGENT.md'], /^# Wiki Maker Agent/);
+  assert.match(files['.harness-rpg/skills/ouroboros-plan.md'], /^# ouroboros-plan/);
   assert.match(files['.harness-rpg/skills/wiki-ingest-source.md'], /^# wiki-ingest-source/);
+  assert.match(files['.harness-rpg/nodes/wiki-make/work.md'], /^# Wiki Make/);
+  assert.equal(files['.harness-rpg/specs/ouroboros-war-plan-protocol.json'], undefined);
   assert.match(files['.harness-rpg/state.json'], /"activeSessionId": "session-001"/);
 });
 
 test('runGraphUntilBlocked executes nodes through the OpenCode bridge until approval is required', () => {
   const running = runGraphUntilBlocked(createInitialState());
 
+  assert.match(running.graph.nodes.find((node) => node.id === 'start').logs.why, /execution-ready plan/);
   assert.equal(running.graph.nodes.find((node) => node.id === 'wiki-make').status, 'completed');
   assert.equal(running.graph.nodes.find((node) => node.id === 'destructive-check').status, 'approval_required');
   assert.equal(running.bridgeEvents.length, 4);
@@ -350,6 +561,7 @@ test('getWikiSkillPack exposes llm_wiki concepts as host-agent skills', () => {
   const pack = getWikiSkillPack(createInitialState());
 
   assert.deepEqual(pack.map((skill) => skill.id), [
+    'ouroboros-plan',
     'wiki-ingest-source',
     'wiki-query',
     'wiki-lint',

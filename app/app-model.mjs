@@ -17,8 +17,15 @@ const nodeIdPattern = /^[a-zA-Z0-9_-]{1,64}$/;
 const maxImportedNodes = 30;
 const maxNodeTitleLength = 80;
 const maxNodeDescriptionLength = 500;
+const maxWorkSections = 12;
 
 export const wikiSkills = [
+  {
+    id: 'ouroboros-plan',
+    name: 'Ouroboros Plan',
+    branch: 'Planning',
+    markdown: '# ouroboros-plan\n\nTurn a user goal and node work sections into a concise execution plan with clear deliverables, constraints, and verification steps.',
+  },
   {
     id: 'wiki-ingest-source',
     name: 'Wiki Ingest Source',
@@ -70,7 +77,7 @@ export const wikiSkills = [
 ];
 
 export function createInitialState() {
-  return {
+  const initialState = {
     project: {
       name: 'harness-rpg',
       path: PROJECT_PATH,
@@ -81,6 +88,21 @@ export function createInitialState() {
     bridgeEvents: [],
     locale: 'ko',
     agents: [
+      {
+        id: 'planner-agent',
+        name: 'Ouroboros Planner Agent',
+        className: 'Goal-to-Plan Weaver',
+        level: 1,
+        xp: 0,
+        profileImage: '',
+        selectedSkills: ['ouroboros-plan'],
+        agentMd: '# Ouroboros Planner Agent\n\nTurns user-friendly node work sections into an execution-ready plan before implementation begins.\n\n- Read the node work brief as the source of truth\n- Convert fuzzy goals into ordered steps\n- Keep verification explicit and practical',
+        feedback: [
+          'Planning should be a default capability, not a protocol panel the user has to understand.',
+          'Each node needs a human-editable brief that can be packed into clean agent markdown.',
+          'If this planner is removed, the Start node should still fall back to automatic planning behavior.',
+        ],
+      },
       {
         id: 'wiki-maker',
         name: 'Wiki Maker',
@@ -176,7 +198,7 @@ export function createInitialState() {
     skills: wikiSkills,
     graph: {
       nodes: [
-        node('start', 'Start', 'System', [], 'ready', 'Boot the tutorial war plan.'),
+        node('start', 'Start', 'planner-agent', ['ouroboros-plan'], 'ready', 'Plan the graph from the user goal before work begins.'),
         node('wiki-make', 'Wiki Make', 'wiki-maker', ['wiki-ingest-source', 'wiki-build-graph'], 'idle', 'Create the first project knowledge map.'),
         node('skill-attune', 'Skill Attune', 'wiki-maker', ['wiki-enrich-wikilinks'], 'idle', 'Bind OpenCode skills to the agent party.'),
         node('destructive-check', 'Destructive Command Check', 'gate-warden', ['wiki-lint'], 'idle', 'Approval gate example for destructive commands.', true),
@@ -202,6 +224,52 @@ export function createInitialState() {
       { id: 'gap', label: 'fog gap', kind: 'fog-island', x: 64, y: 70 },
     ],
   };
+  return { ...initialState, pools: createPoolsFromState(initialState) };
+}
+
+function createPoolsFromState(state) {
+  return {
+    skills: state.skills.map((skill) => ({ ...skill })),
+    skillTrees: [{
+      id: 'opencode-wiki-skill-tree',
+      name: 'OpenCode Wiki Skill Tree',
+      description: 'Reusable tree of OpenCode-compatible planning and wiki skills.',
+      skillIds: state.skills.map((skill) => skill.id),
+    }],
+    agents: state.agents.map((agent) => cloneAgent(agent)),
+    nodes: state.graph.nodes.map((nodeItem) => poolNodeFromGraphNode(nodeItem)),
+    graphs: [poolGraphFromGraph(state.graph, 'tutorial-quest-graph', 'Tutorial Quest Graph')],
+  };
+}
+
+function cloneAgent(agent) {
+  return {
+    ...agent,
+    selectedSkills: [...(agent.selectedSkills ?? [])],
+    feedback: agent.feedback ? [...agent.feedback] : undefined,
+  };
+}
+
+function poolNodeFromGraphNode(nodeItem) {
+  return {
+    id: nodeItem.id,
+    title: nodeItem.title,
+    description: nodeItem.description,
+    agentId: nodeItem.agentId,
+    skills: [...(nodeItem.skills ?? [])],
+    destructive: nodeItem.destructive === true,
+    position: nodeItem.position ? { ...nodeItem.position } : undefined,
+  };
+}
+
+function poolGraphFromGraph(graph, id, name) {
+  return {
+    id,
+    name,
+    description: 'Reusable snapshot of the front-end graph as the agent sees it.',
+    nodeIds: graph.nodes.map((nodeItem) => nodeItem.id),
+    edges: graph.edges.map((edge) => [...edge]),
+  };
 }
 
 export function setLocale(state, locale) {
@@ -223,8 +291,36 @@ function node(id, title, agentId, skills, status, description, destructive = fal
       artifacts: [],
       why: 'No skill used yet.',
     },
+    workSections: createDefaultWorkSections({ title, description, destructive }),
     review: createReviewBundle({ id, title, agentId, skills, status, description, destructive }),
   };
+}
+
+function createDefaultWorkSections({ description, destructive = false }) {
+  return [
+    {
+      id: 'goal',
+      label: 'Goal',
+      body: description,
+    },
+    {
+      id: 'purpose',
+      label: 'Purpose',
+      body: 'Explain why this node matters to the user and what decision it unlocks.',
+    },
+    {
+      id: 'deliverable',
+      label: 'Deliverable',
+      body: 'Name the artifact, code change, plan, or answer the agent should produce.',
+    },
+    {
+      id: 'verification',
+      label: 'Verification',
+      body: destructive
+        ? 'Wait for explicit approval, then describe how the user can verify the destructive step was safe.'
+        : 'Describe the observable proof that this node is complete.',
+    },
+  ];
 }
 
 function createReviewBundle(nodeItem, completed = false) {
@@ -313,11 +409,91 @@ export function assignAgentToNode(state, nodeId, agentId) {
 }
 
 export function updateNodeText(state, nodeId, text) {
+  return updateGraphNode(state, nodeId, (nodeItem) => {
+    const description = text.description ?? nodeItem.description;
+    const workSections = text.description === undefined
+      ? nodeItem.workSections
+      : normalizeWorkSections(nodeItem.workSections, nodeItem).map((section) => section.id === 'goal' && section.body === nodeItem.description
+        ? { ...section, body: description }
+        : section);
+    return {
+      ...nodeItem,
+      title: text.title ?? nodeItem.title,
+      description,
+      workSections,
+    };
+  });
+}
+
+export function updateNodeWorkSection(state, nodeId, sectionId, patch) {
   return updateGraphNode(state, nodeId, (nodeItem) => ({
     ...nodeItem,
-    title: text.title ?? nodeItem.title,
-    description: text.description ?? nodeItem.description,
+    workSections: normalizeWorkSections(nodeItem.workSections, nodeItem).map((section) => section.id === sectionId ? {
+      ...section,
+      label: patch.label === undefined ? section.label : sanitizeWorkSectionLabel(patch.label, section.label),
+      body: patch.body ?? section.body,
+    } : section),
   }));
+}
+
+export function addNodeWorkSection(state, nodeId) {
+  return updateGraphNode(state, nodeId, (nodeItem) => {
+    const sections = normalizeWorkSections(nodeItem.workSections, nodeItem);
+    if (sections.length >= maxWorkSections) return nodeItem;
+    const nextNumber = Math.max(0, ...sections
+      .filter((section) => section.id.startsWith('custom-section-'))
+      .map((section) => Number(section.id.replace('custom-section-', '')))
+      .filter(Number.isInteger)) + 1;
+    return {
+      ...nodeItem,
+      workSections: [...sections, {
+        id: `custom-section-${nextNumber}`,
+        label: `Custom Section ${nextNumber}`,
+        body: 'Add the details this agent should receive.',
+      }],
+    };
+  });
+}
+
+export function removeNodeWorkSection(state, nodeId, sectionId) {
+  return updateGraphNode(state, nodeId, (nodeItem) => ({
+    ...nodeItem,
+    workSections: normalizeWorkSections(nodeItem.workSections, nodeItem).filter((section) => section.id !== sectionId),
+  }));
+}
+
+export function buildNodeWorkMarkdown(state, nodeId) {
+  const nodeItem = state.graph.nodes.find((node) => node.id === nodeId) ?? state.graph.nodes[0];
+  const agent = state.agents.find((item) => item.id === nodeItem.agentId);
+  const resolvedAgentId = resolveNodeAgentId(state, nodeItem);
+  const agentText = agent ? `${agent.name} (${agent.id})` : `${resolvedAgentId} (${nodeItem.agentId} missing)`;
+  const skillText = nodeItem.skills.length ? nodeItem.skills.join(', ') : 'none';
+  const sections = normalizeWorkSections(nodeItem.workSections, nodeItem);
+  const sectionText = sections.length
+    ? sections.map((section) => `### ${section.label}\n\n${section.body || '_No content yet._'}`).join('\n\n')
+    : '_No custom work sections yet._';
+
+  return [
+    `# ${nodeItem.title}`,
+    '',
+    `> Node ID: ${nodeItem.id}`,
+    '',
+    '## Assignment',
+    '',
+    `- Agent: ${agentText}`,
+    `- Skills: ${skillText}`,
+    `- Destructive step: ${nodeItem.destructive ? 'yes, require explicit approval' : 'no'}`,
+    '',
+    '## Work Brief',
+    '',
+    sectionText,
+    '',
+    '## Response Contract',
+    '',
+    '- State the plan or result clearly.',
+    '- Name files, commands, or artifacts that changed.',
+    '- Include the verification evidence a user can reproduce.',
+  ].join('\n');
 }
 
 export function buildOuroborosProtocolPayload(state) {
@@ -351,7 +527,7 @@ export function applyWarPlanSpec(state, spec) {
   const existingIds = new Set(state.graph.nodes.map((nodeItem) => nodeItem.id));
   const agentIds = new Set(state.agents.map((agent) => agent.id));
   const updatedNodes = state.graph.nodes.map((nodeItem) => {
-    if (nodeItem.agentId === 'System') return nodeItem;
+    if (nodeItem.agentId === 'System' || nodeItem.id === 'start') return nodeItem;
     const incoming = incomingNodes.find((candidate) => candidate.id === nodeItem.id);
     if (!incoming) return nodeItem;
     return specNode(nodeItem, incoming, agentIds);
@@ -396,6 +572,337 @@ export function getGraphProgress(state) {
 
 export function getWikiSkillPack(state) {
   return state.skills.map((skill) => ({ ...skill }));
+}
+
+export function addPoolSkill(state) {
+  const pools = normalizePools(state.pools, state);
+  const number = nextCustomNumber(state.skills, 'custom-skill-');
+  const skill = {
+    id: `custom-skill-${number}`,
+    name: `Custom Skill ${number}`,
+    branch: 'Custom',
+    markdown: `# custom-skill-${number}\n\nDescribe when an agent should use this reusable skill and what output it should produce.`,
+  };
+  return {
+    ...state,
+    skills: [...state.skills, skill],
+    pools: {
+      ...pools,
+      skills: [...pools.skills, { ...skill }],
+    },
+  };
+}
+
+export function addPoolSkillTree(state) {
+  const pools = normalizePools(state.pools, state);
+  const number = nextCustomNumber(pools.skillTrees, 'custom-skill-tree-');
+  const preferredSkill = state.skills.find((skill) => skill.id.startsWith('custom-skill-')) ?? state.skills.at(-1);
+  const skillTree = {
+    id: `custom-skill-tree-${number}`,
+    name: `Custom Skill Tree ${number}`,
+    description: 'Group reusable skills so agents can pick a coherent capability path.',
+    skillIds: preferredSkill ? [preferredSkill.id] : [],
+  };
+  return {
+    ...state,
+    pools: {
+      ...pools,
+      skillTrees: [...pools.skillTrees, skillTree],
+    },
+  };
+}
+
+export function addPoolAgent(state) {
+  const pools = normalizePools(state.pools, state);
+  const number = nextCustomNumber(state.agents, 'custom-agent-');
+  const agent = {
+    id: `custom-agent-${number}`,
+    name: `Custom Agent ${number}`,
+    className: 'Pool-Born Specialist',
+    level: 1,
+    xp: 0,
+    profileImage: '',
+    selectedSkills: [],
+    agentMd: `# Custom Agent ${number}\n\nDescribe this reusable agent's role, constraints, and verification habits.`,
+  };
+  return {
+    ...state,
+    agents: [...state.agents, agent],
+    pools: {
+      ...pools,
+      agents: [...pools.agents, cloneAgent(agent)],
+    },
+  };
+}
+
+export function addPoolNode(state) {
+  const pools = normalizePools(state.pools, state);
+  const number = nextCustomNumber(pools.nodes, 'custom-pool-node-');
+  const nodeTemplate = {
+    id: `custom-pool-node-${number}`,
+    title: `Custom Pool Node ${number}`,
+    description: 'Reusable node template for future graph work.',
+    agentId: state.activeAgentId,
+    skills: [],
+    destructive: false,
+  };
+  return {
+    ...state,
+    pools: {
+      ...pools,
+      nodes: [...pools.nodes, nodeTemplate],
+    },
+  };
+}
+
+export function addPoolGraph(state) {
+  const pools = normalizePools(state.pools, state);
+  const number = nextCustomNumber(pools.graphs, 'custom-graph-');
+  const graph = poolGraphFromGraph(state.graph, `custom-graph-${number}`, `Custom Graph ${number}`);
+  return {
+    ...state,
+    pools: {
+      ...pools,
+      graphs: [...pools.graphs, graph],
+    },
+  };
+}
+
+export function assignPoolAgentToNode(state, nodeId, agentId) {
+  const pools = normalizePools(state.pools, state);
+  const poolAgent = pools.agents.find((agent) => agent.id === agentId);
+  if (!poolAgent) return state;
+  const stateWithAgent = state.agents.some((agent) => agent.id === agentId)
+    ? { ...state, pools }
+    : { ...state, agents: [...state.agents, cloneAgent(poolAgent)], pools };
+  return {
+    ...assignAgentToNode(stateWithAgent, nodeId, agentId),
+    activeAgentId: agentId,
+  };
+}
+
+export function togglePoolSkillForAgent(state, agentId, skillId, nodeId = '') {
+  const pools = normalizePools(state.pools, state);
+  const poolSkill = pools.skills.find((skill) => skill.id === skillId);
+  if (!poolSkill || !state.agents.some((agent) => agent.id === agentId)) return state;
+  const stateWithSkill = state.skills.some((skill) => skill.id === skillId)
+    ? { ...state, pools }
+    : { ...state, skills: [...state.skills, { ...poolSkill }], pools };
+  const toggled = assignSkillToAgent(stateWithSkill, agentId, skillId);
+  const updatedAgent = toggled.agents.find((agent) => agent.id === agentId);
+  const hasSkill = updatedAgent?.selectedSkills.includes(skillId) === true;
+  const graph = nodeId ? {
+    ...toggled.graph,
+    nodes: toggled.graph.nodes.map((nodeItem) => {
+      if (nodeItem.id !== nodeId || nodeItem.agentId !== agentId) return nodeItem;
+      const skills = hasSkill
+        ? Array.from(new Set([...nodeItem.skills, skillId]))
+        : nodeItem.skills.filter((id) => id !== skillId);
+      return refreshNodeReview({ ...nodeItem, skills }, nodeItem.review?.summary);
+    }),
+  } : toggled.graph;
+  return {
+    ...toggled,
+    graph,
+    activeAgentId: agentId,
+    pools: {
+      ...pools,
+      agents: pools.agents.map((agent) => agent.id === agentId && updatedAgent ? cloneAgent(updatedAgent) : agent),
+    },
+  };
+}
+
+export function applyPoolSkillTreeToAgent(state, agentId, skillTreeId, nodeId = '') {
+  const pools = normalizePools(state.pools, state);
+  const skillTree = pools.skillTrees.find((tree) => tree.id === skillTreeId);
+  const agent = state.agents.find((item) => item.id === agentId);
+  if (!skillTree || !agent) return state;
+  const poolSkillsById = new Map(pools.skills.map((skill) => [skill.id, skill]));
+  const skillIds = skillTree.skillIds.filter((skillId) => poolSkillsById.has(skillId));
+  const activeSkillIds = new Set(state.skills.map((skill) => skill.id));
+  const missingSkills = skillIds.flatMap((skillId) => activeSkillIds.has(skillId) ? [] : [{ ...poolSkillsById.get(skillId) }]);
+  const updatedAgents = state.agents.map((item) => item.id === agentId ? {
+    ...item,
+    selectedSkills: Array.from(new Set([...item.selectedSkills, ...skillIds])),
+  } : item);
+  const updatedAgent = updatedAgents.find((item) => item.id === agentId);
+  return {
+    ...state,
+    activeAgentId: agentId,
+    skills: [...state.skills, ...missingSkills],
+    agents: updatedAgents,
+    graph: nodeId ? {
+      ...state.graph,
+      nodes: state.graph.nodes.map((nodeItem) => {
+        if (nodeItem.id !== nodeId || nodeItem.agentId !== agentId) return nodeItem;
+        return refreshNodeReview({
+          ...nodeItem,
+          skills: Array.from(new Set([...nodeItem.skills, ...skillIds])),
+        }, nodeItem.review?.summary);
+      }),
+    } : state.graph,
+    pools: {
+      ...pools,
+      agents: pools.agents.map((item) => item.id === agentId && updatedAgent ? cloneAgent(updatedAgent) : item),
+    },
+  };
+}
+
+export function instantiatePoolNode(state, poolNodeId) {
+  const pools = normalizePools(state.pools, state);
+  const template = pools.nodes.find((poolNode) => poolNode.id === poolNodeId);
+  if (!template) return state;
+  const id = uniqueNodeId(state.graph.nodes, template.id);
+  const previousNode = state.graph.nodes.at(-1);
+  const graphNode = node(
+    id,
+    template.title,
+    state.agents.some((agent) => agent.id === template.agentId) ? template.agentId : state.activeAgentId,
+    (template.skills ?? []).filter((skillId) => state.skills.some((skill) => skill.id === skillId)),
+    'idle',
+    template.description,
+    template.destructive === true,
+  );
+  const positionedNode = template.position ? { ...graphNode, position: { ...template.position } } : graphNode;
+  return {
+    ...state,
+    selectedNodeId: id,
+    pools,
+    graph: {
+      ...state.graph,
+      nodes: [...state.graph.nodes, positionedNode],
+      edges: previousNode ? [...state.graph.edges, [previousNode.id, id]] : state.graph.edges,
+    },
+  };
+}
+
+export function applyPoolGraph(state, graphId) {
+  const pools = normalizePools(state.pools, state);
+  const graphTemplate = pools.graphs.find((graph) => graph.id === graphId);
+  if (!graphTemplate) return state;
+  const currentNodes = new Map(state.graph.nodes.map((nodeItem) => [nodeItem.id, nodeItem]));
+  const orderedNodes = [
+    ...graphTemplate.nodeIds.flatMap((nodeId) => currentNodes.has(nodeId) ? [currentNodes.get(nodeId)] : []),
+    ...state.graph.nodes.filter((nodeItem) => !graphTemplate.nodeIds.includes(nodeItem.id)),
+  ];
+  const nodeIds = new Set(orderedNodes.map((nodeItem) => nodeItem.id));
+  const edges = graphTemplate.edges.filter(([from, to]) => nodeIds.has(from) && nodeIds.has(to)).map(([from, to]) => [from, to]);
+  return {
+    ...state,
+    selectedNodeId: nodeIds.has(state.selectedNodeId) ? state.selectedNodeId : graphTemplate.nodeIds.find((nodeId) => nodeIds.has(nodeId)) ?? state.selectedNodeId,
+    pools,
+    graph: {
+      ...state.graph,
+      nodes: orderedNodes,
+      edges,
+    },
+  };
+}
+
+export function removePoolSkill(state, skillId) {
+  const pools = normalizePools(state.pools, state);
+  const updatedAgents = state.agents.map((agent) => ({
+    ...agent,
+    selectedSkills: agent.selectedSkills.filter((id) => id !== skillId),
+  }));
+  const updatedNodes = state.graph.nodes.map((nodeItem) => refreshNodeReview({
+    ...nodeItem,
+    skills: nodeItem.skills.filter((id) => id !== skillId),
+  }, nodeItem.review?.summary));
+  return {
+    ...state,
+    agents: updatedAgents,
+    skills: state.skills.filter((skill) => skill.id !== skillId),
+    graph: {
+      ...state.graph,
+      nodes: updatedNodes,
+    },
+    pools: {
+      ...pools,
+      skills: pools.skills.filter((skill) => skill.id !== skillId),
+      skillTrees: pools.skillTrees.map((tree) => ({ ...tree, skillIds: tree.skillIds.filter((id) => id !== skillId) })),
+      agents: pools.agents.map((agent) => ({ ...agent, selectedSkills: (agent.selectedSkills ?? []).filter((id) => id !== skillId) })),
+      nodes: pools.nodes.map((poolNode) => ({ ...poolNode, skills: (poolNode.skills ?? []).filter((id) => id !== skillId) })),
+    },
+  };
+}
+
+export function buildGraphMarkdown(state) {
+  const graphPool = normalizePools(state.pools, state).graphs[0];
+  const nodeRows = state.graph.nodes.map((nodeItem, index) => {
+    const agent = state.agents.find((item) => item.id === nodeItem.agentId);
+    const skills = nodeItem.skills.length ? nodeItem.skills.join(', ') : 'none';
+    return `${index + 1}. [${nodeItem.title}](./${graphNodeFileName(nodeItem, index)}) — ${nodeItem.status} — ${agent?.name ?? nodeItem.agentId} — skills: ${skills}`;
+  });
+  const edgeRows = state.graph.edges.map(([from, to]) => `- ${from} --> ${to}`);
+  return [
+    '# Harness RPG Visible Graph',
+    '',
+    '> Generated from the graph currently shown in the front-end. Agents should treat this as the navigable work map.',
+    '',
+    '## Pool Source',
+    '',
+    `- Graph pool: ${graphPool.name} (${graphPool.id})`,
+    `- Node count: ${state.graph.nodes.length}`,
+    `- Edge count: ${state.graph.edges.length}`,
+    '',
+    '## Nodes',
+    '',
+    ...nodeRows,
+    '',
+    '## Edges',
+    '',
+    ...(edgeRows.length ? edgeRows : ['_No edges yet._']),
+    '',
+    '## Agent Contract',
+    '',
+    '- Open the linked node markdown before acting on a node.',
+    '- Preserve node IDs when reporting progress back to Harness RPG.',
+    '- Include skill usage and verification evidence in the node result.',
+  ].join('\n');
+}
+
+export function buildGraphNodeMarkdown(state, nodeId, index = state.graph.nodes.findIndex((nodeItem) => nodeItem.id === nodeId)) {
+  const nodeItem = state.graph.nodes.find((node) => node.id === nodeId) ?? state.graph.nodes[0];
+  const safeIndex = index >= 0 ? index : state.graph.nodes.findIndex((node) => node.id === nodeItem.id);
+  const incoming = state.graph.edges.filter(([, to]) => to === nodeItem.id).map(([from]) => from);
+  const outgoing = state.graph.edges.filter(([from]) => from === nodeItem.id).map(([, to]) => to);
+  const workMarkdown = buildNodeWorkMarkdown(state, nodeItem.id).replace(/^# .+\n\n/, '');
+  return [
+    `# ${nodeItem.title}`,
+    '',
+    `> Front-end graph node: ${graphNodeFileLabel(nodeItem, safeIndex)}`,
+    '',
+    '## Graph Position',
+    '',
+    `- Node ID: ${nodeItem.id}`,
+    `- Status: ${nodeItem.status}`,
+    `- Incoming: ${incoming.join(', ') || 'none'}`,
+    `- Outgoing: ${outgoing.join(', ') || 'none'}`,
+    '',
+    workMarkdown,
+  ].join('\n');
+}
+
+export function buildSkillUsageSummary(state, nodeId) {
+  const nodeItem = state.graph.nodes.find((node) => node.id === nodeId) ?? state.graph.nodes[0];
+  const resolvedAgentId = resolveNodeAgentId(state, nodeItem);
+  const agent = state.agents.find((item) => item.id === resolvedAgentId) ?? state.agents.find((item) => item.id === nodeItem.agentId);
+  return nodeItem.skills.map((skillId) => {
+    const skill = state.skills.find((item) => item.id === skillId);
+    return {
+      skillId,
+      skillName: skill?.name ?? skillId,
+      agentId: resolvedAgentId,
+      agentName: agent?.name ?? resolvedAgentId,
+      reason: describeSkillUse(skillId, nodeItem),
+      evidence: nodeItem.status === 'completed'
+        ? `${nodeItem.title} completed and produced ${nodeItem.logs.artifacts.join(', ') || 'node-scoped artifacts'}.`
+        : nodeItem.status === 'approval_required'
+          ? `${nodeItem.title} is waiting for approval before the skill can finish.`
+          : `${nodeItem.title} has not run yet; this skill is assigned for the next execution.`,
+    };
+  });
 }
 
 export function addWarPlanNode(state) {
@@ -481,11 +988,8 @@ export function swapWarPlanNodes(state, sourceNodeId, targetNodeId) {
 }
 
 export function exportWorkspaceFiles(state) {
-  const protocolPayload = buildOuroborosProtocolPayload(state);
   const files = {
     [state.backend.fileState]: `${JSON.stringify(state, null, 2)}\n`,
-    '.harness-rpg/specs/ouroboros-war-plan-protocol.json': `${JSON.stringify(protocolPayload, null, 2)}\n`,
-    '.harness-rpg/specs/ouroboros-war-plan-prompt.md': `${protocolPayload.prompt}\n`,
   };
 
   for (const agent of state.agents) {
@@ -495,6 +999,15 @@ export function exportWorkspaceFiles(state) {
   for (const skill of state.skills) {
     files[`${state.backend.skillsDir}/${skill.id}.md`] = `${skill.markdown}\n`;
   }
+
+  for (const nodeItem of state.graph.nodes) {
+    files[`.harness-rpg/nodes/${nodeItem.id}/work.md`] = `${buildNodeWorkMarkdown(state, nodeItem.id)}\n`;
+  }
+
+  files['.harness-rpg/graphs/current/GRAPH.md'] = `${buildGraphMarkdown(state)}\n`;
+  state.graph.nodes.forEach((nodeItem, index) => {
+    files[`.harness-rpg/graphs/current/${graphNodeFileName(nodeItem, index)}`] = `${buildGraphNodeMarkdown(state, nodeItem.id, index)}\n`;
+  });
 
   return files;
 }
@@ -567,6 +1080,110 @@ function truncateText(value, maxLength) {
   return String(value).slice(0, maxLength);
 }
 
+function nextCustomNumber(items, prefix) {
+  return Math.max(0, ...items
+    .filter((item) => String(item.id ?? '').startsWith(prefix))
+    .map((item) => Number(String(item.id).replace(prefix, '')))
+    .filter(Number.isInteger)) + 1;
+}
+
+function uniqueNodeId(nodes, baseId) {
+  const existingIds = new Set(nodes.map((nodeItem) => nodeItem.id));
+  if (!existingIds.has(baseId)) return baseId;
+  let index = 1;
+  let id = `${baseId}-copy-${index}`;
+  while (existingIds.has(id)) {
+    index += 1;
+    id = `${baseId}-copy-${index}`;
+  }
+  return id;
+}
+
+function graphNodeFileName(nodeItem, index) {
+  return `${graphNodeFileLabel(nodeItem, index)}.md`;
+}
+
+function graphNodeFileLabel(nodeItem, index) {
+  const number = String(index + 1).padStart(2, '0');
+  const title = String(nodeItem.title || nodeItem.id)
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toUpperCase() || 'NODE';
+  return `${number}_${title}_NODE`;
+}
+
+function normalizePools(pools, state) {
+  const defaults = createPoolsFromState(state);
+  if (!pools) return defaults;
+  return {
+    skills: mergeById(defaults.skills, Array.isArray(pools.skills) ? pools.skills : []),
+    skillTrees: mergeById(defaults.skillTrees, Array.isArray(pools.skillTrees) ? pools.skillTrees : []),
+    agents: mergeById(defaults.agents, Array.isArray(pools.agents) ? pools.agents : []),
+    nodes: mergeById(defaults.nodes, Array.isArray(pools.nodes) ? pools.nodes : []),
+    graphs: mergeById(defaults.graphs, Array.isArray(pools.graphs) ? pools.graphs : []),
+  };
+}
+
+function describeSkillUse(skillId, nodeItem) {
+  if (skillId === 'ouroboros-plan') {
+    return 'This skill turns the user goal and node work sections into an execution-ready plan before implementation starts.';
+  }
+  if (skillId === 'wiki-ingest-source') {
+    return 'This skill reads project files so the agent can ground the node result in the current repository.';
+  }
+  if (skillId === 'wiki-build-graph') {
+    return 'This skill turns files, concepts, and visible graph nodes into a navigable knowledge graph.';
+  }
+  if (skillId === 'wiki-query') {
+    return 'This skill lets the agent answer from indexed project knowledge instead of guessing.';
+  }
+  if (skillId === 'wiki-lint') {
+    return nodeItem.destructive
+      ? 'This skill checks risk and stale assumptions before the destructive approval gate continues.'
+      : 'This skill checks stale claims, contradictions, and missing links before the result is trusted.';
+  }
+  if (skillId === 'wiki-review-actions') {
+    return 'This skill converts review feedback into concrete next actions the user can inspect.';
+  }
+  if (skillId === 'wiki-enrich-wikilinks') {
+    return 'This skill strengthens markdown relationships so future agents can traverse the project faster.';
+  }
+  if (skillId === 'wiki-detect-gaps') {
+    return 'This skill finds missing knowledge and isolated graph areas before they become blind spots.';
+  }
+  if (skillId === 'wiki-deep-research') {
+    return 'This skill expands an identified knowledge gap into a researched project artifact.';
+  }
+  return 'This assigned pool skill gives the agent a reusable capability for this node.';
+}
+
+function normalizeWorkSections(sections, nodeItem) {
+  const seen = new Set();
+  const source = Array.isArray(sections) ? sections : createDefaultWorkSections(nodeItem);
+  return source.slice(0, maxWorkSections).flatMap((section, index) => {
+    const id = nodeIdPattern.test(section?.id ?? '') ? section.id : `section-${index + 1}`;
+    if (seen.has(id)) return [];
+    seen.add(id);
+    return [{
+      id,
+      label: sanitizeWorkSectionLabel(section?.label, `Section ${index + 1}`),
+      body: String(section?.body ?? ''),
+    }];
+  });
+}
+
+function sanitizeWorkSectionLabel(value, fallback) {
+  const label = truncateText(String(value ?? '').replace(/\s+/g, ' ').trim(), 60);
+  return label || fallback;
+}
+
+function resolveNodeAgentId(state, nodeItem) {
+  if (!nodeItem || nodeItem.agentId === 'System') return 'System';
+  if (state.agents.some((agent) => agent.id === nodeItem.agentId)) return nodeItem.agentId;
+  if (nodeItem.id === 'start' || nodeItem.skills.includes('ouroboros-plan')) return 'auto-planner';
+  return nodeItem.agentId;
+}
+
 function protocolNode(nodeItem) {
   return {
     id: nodeItem.id,
@@ -617,19 +1234,22 @@ function awardAgentExperience(agents, agentId) {
   });
 }
 
-function completeNode(nodeItem) {
+function completeNode(nodeItem, resolvedAgentId = nodeItem.agentId) {
   const skillText = nodeItem.skills.length ? nodeItem.skills.join(', ') : 'none';
-  const review = createReviewBundle(nodeItem, true);
+  const resolvedNode = { ...nodeItem, agentId: resolvedAgentId };
+  const review = createReviewBundle(resolvedNode, true);
   return {
     ...nodeItem,
     status: 'completed',
     logs: {
-      friendly: `${nodeItem.title} completed by ${nodeItem.agentId} agent. The host agent used ${skillText} through the OpenCode MCP bridge.`,
-      raw: `event=opencode.bridge.node.completed node=${nodeItem.id} agent=${nodeItem.agentId} skills=${skillText}`,
+      friendly: `${nodeItem.title} completed by ${resolvedAgentId} agent. The host agent used ${skillText} through the OpenCode MCP bridge.`,
+      raw: `event=opencode.bridge.node.completed node=${nodeItem.id} agent=${resolvedAgentId} skills=${skillText}`,
       artifacts: nodeItem.id === 'wiki-make'
         ? ['.harness-rpg/wiki/wiki/index.md', '.harness-rpg/wiki/wiki/overview.md', '.harness-rpg/wiki/wiki/concepts/opencode-bridge.md']
         : ['session-event.json'],
-      why: nodeItem.skills.length
+      why: nodeItem.skills.includes('ouroboros-plan')
+        ? 'Ouroboros Plan was selected to turn the user goal and node work sections into an execution-ready plan.'
+        : nodeItem.skills.length
         ? `${skillText} was selected because this node maintains project knowledge without direct foundation-LLM coupling.`
         : 'Start node boots the tutorial graph.',
     },
@@ -664,19 +1284,21 @@ function appendBridgeEvent(state, event) {
 
 function completeGraphNode(state, nodeId) {
   const clearedNode = state.graph.nodes.find((nodeItem) => nodeItem.id === nodeId);
+  const resolvedAgentId = resolveNodeAgentId(state, clearedNode);
+  const canAwardExperience = state.agents.some((agent) => agent.id === resolvedAgentId);
   const nextState = {
     ...state,
-    agents: clearedNode && clearedNode.agentId !== 'System' ? awardClearedNodeExperience(state.agents, [clearedNode]) : state.agents,
+    agents: clearedNode && resolvedAgentId !== 'System' && canAwardExperience ? awardClearedNodeExperience(state.agents, [{ ...clearedNode, agentId: resolvedAgentId }]) : state.agents,
     graph: {
       ...state.graph,
-      nodes: state.graph.nodes.map((nodeItem) => nodeItem.id === nodeId ? completeNode(nodeItem) : nodeItem),
+      nodes: state.graph.nodes.map((nodeItem) => nodeItem.id === nodeId ? completeNode(nodeItem, resolvedAgentId) : nodeItem),
     },
   };
 
   return appendBridgeEvent(nextState, {
     type: 'node.completed',
     nodeId,
-    agentId: clearedNode?.agentId ?? 'System',
+    agentId: resolvedAgentId,
     skills: clearedNode?.skills ?? [],
   });
 }
@@ -741,7 +1363,14 @@ export function deserializeState(raw) {
 }
 
 function migrateState(state) {
-  return {
+  const defaults = createInitialState();
+  const savedStartNode = state.graph?.nodes?.find((nodeItem) => nodeItem.id === 'start');
+  const shouldSeedPlannerAgent = !savedStartNode || savedStartNode.agentId === 'System' || !savedStartNode.skills?.includes('ouroboros-plan');
+  const defaultAgents = shouldSeedPlannerAgent ? defaults.agents : defaults.agents.filter((agent) => agent.id !== 'planner-agent');
+  const agents = mergeById(defaultAgents, state.agents ?? []);
+  const skills = mergeById(defaults.skills, state.skills ?? []);
+  const graphNodes = (state.graph?.nodes ?? defaults.graph.nodes).map((nodeItem) => migrateGraphNode(nodeItem, defaults));
+  const migratedState = {
     ...state,
     backend: {
       ...backendDefaults,
@@ -752,5 +1381,41 @@ function migrateState(state) {
       },
     },
     bridgeEvents: state.bridgeEvents ?? [],
+    agents,
+    skills,
+    graph: {
+      ...(state.graph ?? defaults.graph),
+      nodes: graphNodes,
+      edges: state.graph?.edges ?? defaults.graph.edges,
+    },
+  };
+  return {
+    ...migratedState,
+    pools: normalizePools(state.pools, migratedState),
+  };
+}
+
+function mergeById(defaultItems, savedItems) {
+  const savedIds = new Set(savedItems.map((item) => item.id));
+  return [...defaultItems.filter((item) => !savedIds.has(item.id)), ...savedItems];
+}
+
+function migrateGraphNode(nodeItem, defaults) {
+  const defaultNode = defaults.graph.nodes.find((candidate) => candidate.id === nodeItem.id);
+  const migratedNode = {
+    ...(defaultNode ?? {}),
+    ...nodeItem,
+  };
+  const plannerStartNode = migratedNode.id === 'start'
+    ? {
+      ...migratedNode,
+      agentId: migratedNode.agentId === 'System' ? 'planner-agent' : migratedNode.agentId,
+      skills: migratedNode.skills?.length ? migratedNode.skills : ['ouroboros-plan'],
+      description: migratedNode.description === 'Boot the tutorial war plan.' ? 'Plan the graph from the user goal before work begins.' : migratedNode.description,
+    }
+    : migratedNode;
+  return {
+    ...plannerStartNode,
+    workSections: normalizeWorkSections(plannerStartNode.workSections, plannerStartNode),
   };
 }
