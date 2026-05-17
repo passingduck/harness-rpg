@@ -40,6 +40,8 @@ import {
   buildGraphMarkdown,
   buildGraphNodeMarkdown,
   buildSkillUsageSummary,
+  buildGraphResultReport,
+  filterGraphResultSkillUsage,
 } from '../app/app-model.mjs';
 
 test('initial state exposes tutorial graph with wiki-make assigned to wiki-maker agent', () => {
@@ -392,6 +394,93 @@ test('skill usage summary explains which skills an agent used and why', () => {
   assert.match(wikiUsage[1].reason, /graph/i);
   assert.equal(plannerUsage[0].skillName, 'Ouroboros Plan');
   assert.match(plannerUsage[0].reason, /execution-ready plan/i);
+});
+
+test('graph result report is unavailable until the full war plan graph completes', () => {
+  const initial = createInitialState();
+  const blocked = startTutorialSession(initial);
+
+  assert.equal(buildGraphResultReport(initial), null);
+  assert.equal(buildGraphResultReport(blocked), null);
+  assert.deepEqual(initial.resultReports, []);
+  assert.deepEqual(blocked.resultReports, []);
+});
+
+test('graph result report requires every graph node to be completed', () => {
+  const completedNodes = Array.from({ length: 199 }, (_, index) => ({
+    id: `done-${index}`,
+    title: `Done ${index}`,
+    description: 'Completed node.',
+    agentId: 'wiki-maker',
+    skills: [],
+    status: 'completed',
+    destructive: false,
+    logs: { friendly: 'Done.', raw: 'done', artifacts: [], why: 'Done.' },
+    review: { result: 'Result: done.' },
+    workSections: [],
+  }));
+  const incomplete = {
+    ...createInitialState(),
+    graph: {
+      nodes: [
+        ...completedNodes,
+        {
+          id: 'idle-tail',
+          title: 'Idle Tail',
+          description: 'Not complete.',
+          agentId: 'wiki-maker',
+          skills: [],
+          status: 'idle',
+          destructive: false,
+          logs: { friendly: 'Idle.', raw: 'idle', artifacts: [], why: 'Idle.' },
+          review: { result: 'Result: idle.' },
+          workSections: [],
+        },
+      ],
+      edges: [],
+    },
+  };
+
+  assert.equal(getGraphProgress(incomplete).percent, 100);
+  assert.equal(buildGraphResultReport(incomplete), null);
+});
+
+test('completed graph creates a persistent result report with actual skill usage', () => {
+  const completed = approveDestructiveNode(startTutorialSession(createInitialState()), 'destructive-check');
+  const report = buildGraphResultReport(completed);
+
+  assert.equal(completed.resultReports.length, 1);
+  assert.equal(completed.resultReports[0].id, report.id);
+  assert.equal(report.status, 'completed');
+  assert.equal(report.progress.percent, 100);
+  assert.equal(report.nodes.every((node) => node.status === 'completed'), true);
+  assert.equal(report.skillUsage.some((entry) => entry.nodeId === 'wiki-make' && entry.skillId === 'wiki-ingest-source'), true);
+  assert.match(report.skillUsage.find((entry) => entry.skillId === 'wiki-ingest-source').evidence, /completed/i);
+});
+
+test('result report skill usage can be filtered by node agent and skill', () => {
+  const completed = approveDestructiveNode(startTutorialSession(createInitialState()), 'destructive-check');
+  const report = buildGraphResultReport(completed);
+
+  const wikiNode = filterGraphResultSkillUsage(report, { nodeId: 'wiki-make' });
+  const wikiAgent = filterGraphResultSkillUsage(report, { agentId: 'wiki-maker' });
+  const wikiSkill = filterGraphResultSkillUsage(report, { skillId: 'wiki-build-graph' });
+  const combined = filterGraphResultSkillUsage(report, { nodeId: 'wiki-make', agentId: 'wiki-maker', skillId: 'wiki-build-graph' });
+  const all = filterGraphResultSkillUsage(report, { nodeId: 'all', agentId: 'all', skillId: 'all' });
+
+  assert.deepEqual(wikiNode.map((entry) => entry.nodeId), ['wiki-make', 'wiki-make']);
+  assert.equal(wikiAgent.every((entry) => entry.agentId === 'wiki-maker'), true);
+  assert.deepEqual(wikiSkill.map((entry) => entry.skillId), ['wiki-build-graph']);
+  assert.deepEqual(combined.map((entry) => entry.skillId), ['wiki-build-graph']);
+  assert.deepEqual(all, report.skillUsage);
+});
+
+test('completed sessions stay completed when start is pressed again', () => {
+  const completed = approveDestructiveNode(startTutorialSession(createInitialState()), 'destructive-check');
+  const restarted = startTutorialSession(completed);
+
+  assert.equal(completed.sessions.find((session) => session.id === completed.activeSessionId).status, 'completed');
+  assert.equal(restarted.sessions.find((session) => session.id === restarted.activeSessionId).status, 'completed');
 });
 
 test('applyWarPlanSpec updates graph nodes and preserves protected system nodes', () => {

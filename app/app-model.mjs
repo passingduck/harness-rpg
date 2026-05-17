@@ -86,6 +86,7 @@ export function createInitialState() {
     },
     backend: backendDefaults,
     bridgeEvents: [],
+    resultReports: [],
     locale: 'ko',
     agents: [
       {
@@ -905,6 +906,46 @@ export function buildSkillUsageSummary(state, nodeId) {
   });
 }
 
+export function buildGraphResultReport(state) {
+  const progress = getGraphProgress(state);
+  if (progress.total === 0 || progress.completed !== progress.total) return null;
+  const completedNodes = state.graph.nodes.filter((nodeItem) => nodeItem.status === 'completed');
+  const skillUsage = completedNodes.flatMap((nodeItem) => buildSkillUsageSummary(state, nodeItem.id).map((entry) => ({
+    ...entry,
+    nodeId: nodeItem.id,
+    nodeTitle: nodeItem.title,
+  })));
+  return {
+    id: `${state.activeSessionId}-result`,
+    sessionId: state.activeSessionId,
+    title: `${state.project.name} War Plan Result`,
+    status: 'completed',
+    progress,
+    summary: `${completedNodes.length} graph nodes completed. Skill usage is based on completed node logs and artifacts only.`,
+    nodes: completedNodes.map((nodeItem) => ({
+      id: nodeItem.id,
+      title: nodeItem.title,
+      status: nodeItem.status,
+      agentId: resolveNodeAgentId(state, nodeItem),
+      artifacts: [...nodeItem.logs.artifacts],
+      result: nodeItem.review.result,
+    })),
+    skillUsage,
+  };
+}
+
+export function filterGraphResultSkillUsage(report, filters = {}) {
+  const nodeId = filters.nodeId ?? 'all';
+  const agentId = filters.agentId ?? 'all';
+  const skillId = filters.skillId ?? 'all';
+  return (report?.skillUsage ?? []).filter((entry) => {
+    if (nodeId !== 'all' && entry.nodeId !== nodeId) return false;
+    if (agentId !== 'all' && entry.agentId !== agentId) return false;
+    if (skillId !== 'all' && entry.skillId !== skillId) return false;
+    return true;
+  });
+}
+
 export function addWarPlanNode(state) {
   const customCount = Math.max(0, ...state.graph.nodes
     .filter((nodeItem) => nodeItem.id.startsWith('custom-node-'))
@@ -1205,16 +1246,17 @@ export function runGraphUntilBlocked(state) {
     if (currentNode.destructive) return requireApproval(currentState, currentNode.id);
     currentState = completeGraphNode(currentState, currentNode.id);
   }
-  return currentState;
+  return persistGraphResultReport(currentState);
 }
 
 export function startTutorialSession(state) {
   const running = runGraphUntilBlocked(state);
   const blockedNode = running.graph.nodes.find((nodeItem) => nodeItem.status === 'approval_required');
+  const report = buildGraphResultReport(running);
   return {
     ...running,
     selectedNodeId: blockedNode?.id ?? 'wiki-make',
-    sessions: running.sessions.map((session) => session.id === running.activeSessionId ? { ...session, status: 'running' } : session),
+    sessions: running.sessions.map((session) => session.id === running.activeSessionId ? { ...session, status: report ? 'completed' : 'running' } : session),
   };
 }
 
@@ -1329,6 +1371,17 @@ export function approveDestructiveNode(state, nodeId) {
   return {
     ...running,
     selectedNodeId: blockedNode?.id ?? nodeId,
+    sessions: running.sessions.map((session) => session.id === running.activeSessionId && !blockedNode ? { ...session, status: 'completed' } : session),
+  };
+}
+
+function persistGraphResultReport(state) {
+  const report = buildGraphResultReport(state);
+  if (!report) return state;
+  const reports = state.resultReports ?? [];
+  return {
+    ...state,
+    resultReports: [...reports.filter((item) => item.id !== report.id), report],
   };
 }
 
@@ -1381,6 +1434,7 @@ function migrateState(state) {
       },
     },
     bridgeEvents: state.bridgeEvents ?? [],
+    resultReports: state.resultReports ?? [],
     agents,
     skills,
     graph: {
