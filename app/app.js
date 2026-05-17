@@ -32,7 +32,8 @@ import {
   instantiatePoolNode,
   applyPoolGraph,
   removePoolSkill,
-  buildSkillUsageSummary,
+  buildGraphResultReport,
+  filterGraphResultSkillUsage,
   createSession,
   forkSession,
   exportWorkspaceFiles,
@@ -43,6 +44,8 @@ let state = deserializeState(localStorage.getItem(STORAGE_KEY));
 let exportStatus = '';
 let dragState = null;
 let marketplaceTab = 'agents';
+let mainTab = 'work';
+let resultFilters = { nodeId: 'all', agentId: 'all', skillId: 'all' };
 
 const copy = {
   ko: {
@@ -54,9 +57,9 @@ const copy = {
     warPlan: '전쟁 계획 튜토리얼', sessionStart: '세션 시작', approve: '파괴 명령 승인',
     addNode: '노드 추가', removeNode: '선택 노드 제거',
     nodeWork: '노드 작업 브리프', nodeWorkHelp: '사용자는 섹션을 편집하고, 에이전트는 아래 markdown을 그대로 읽습니다.', addWorkSection: '섹션 추가', removeWorkSection: '섹션 삭제', sectionTitle: '섹션 이름', sectionBody: '섹션 내용', aiMarkdown: 'AI용 Markdown',
-    nodeSettingsWidget: '노드 설정 위젯', nodeSettingsHelp: '그래프 노드를 누르면 이 큰 위젯에서 담당자, 작업 브리프, 스킬 사용 이유를 한 번에 조정합니다.',
+    nodeSettingsWidget: '노드 설정 위젯', nodeSettingsHelp: '그래프 노드를 누르면 이 큰 위젯에서 담당자와 작업 브리프를 조정합니다.',
     pools: '리소스 마켓', poolsHelp: '마켓플레이스처럼 Agent를 노드에 배치하고, 선택 Agent에 Skill/Skill tree를 장착하고, Node/Graph 템플릿을 가져옵니다.', poolSkills: 'Skill', poolSkillTrees: 'Skill Tree', poolAgents: 'Agent', poolNodes: 'Node', poolGraphs: 'Graph', addPoolSkill: 'Skill 추가', addPoolSkillTree: 'Skill tree 추가', addPoolAgent: 'Agent 추가', addPoolNode: 'Node 추가', addPoolGraph: 'Graph 추가', assignToNode: '노드에 배치', equipSkill: 'Agent에 장착', unequipSkill: '장착 해제', deleteSkill: 'Skill 삭제', useNodeTemplate: '노드로 추가', applyGraph: 'Graph 적용', applySkillTree: 'Tree 장착', marketplaceContext: '현재 노드', activeAgentLabel: '선택 Agent', poolPreview: '풀 아이템',
-    skillUsage: '스킬 사용 내역', skillUsageHelp: 'Agent가 어떤 스킬을 왜 썼는지 사용자가 읽기 쉬운 카드로 보여줍니다.', noSkillUsage: '아직 배정된 스킬이 없습니다.', skillReason: '왜 사용했나', skillEvidence: '증거',
+    skillUsage: '스킬 사용 내역', skillUsageHelp: 'War plan 그래프가 완료된 뒤 실제 노드 로그와 산출물을 기준으로 보여줍니다.', noSkillUsage: '아직 완료된 그래프 결과가 없습니다.', skillReason: '왜 사용했나', skillEvidence: '증거', resultTab: 'Result', workTab: 'Work', resultReport: '결과 리포트', resultPending: '그래프를 한 번 끝까지 완료하면 이 탭에 스킬 사용 이유와 산출물이 저장됩니다.', resultSummary: '완료 요약', nodeResults: '노드 결과', resultFilters: '결과 필터', filterNode: '노드', filterAgent: '에이전트', filterSkill: '스킬', filterAll: '전체', filteredResults: '표시 중', noFilteredSkillUsage: '이 조합에 맞는 스킬 사용 내역이 없습니다.',
     overallProgress: '전체 진행률', clearedNodes: '클리어 노드',
     flow: '흐름: 프로젝트 열기 → 에이전트/스킬 세팅 → Start → wiki-maker agent의 wiki-make → 파괴 명령 승인 게이트.',
     skillTree: 'OpenCode 스킬 트리', selectedAgent: '선택된 에이전트',
@@ -76,9 +79,9 @@ const copy = {
     warPlan: 'War Plan Tutorial', sessionStart: 'Session Start', approve: 'Approve Destructive Command',
     addNode: 'Add Node', removeNode: 'Remove Selected Node',
     nodeWork: 'Node Work Brief', nodeWorkHelp: 'Users edit these sections; agents later receive the packed markdown below.', addWorkSection: 'Add Section', removeWorkSection: 'Delete Section', sectionTitle: 'Section title', sectionBody: 'Section body', aiMarkdown: 'AI Markdown',
-    nodeSettingsWidget: 'Node Settings Widget', nodeSettingsHelp: 'Click a graph node to tune owner, work brief, and skill-use rationale in this larger widget.',
+    nodeSettingsWidget: 'Node Settings Widget', nodeSettingsHelp: 'Click a graph node to tune owner and work brief in this larger widget.',
     pools: 'Resource Market', poolsHelp: 'Browse it like a marketplace: assign agents to nodes, equip skills/skill trees to the selected agent, and instantiate node/graph templates.', poolSkills: 'Skill', poolSkillTrees: 'Skill Tree', poolAgents: 'Agent', poolNodes: 'Node', poolGraphs: 'Graph', addPoolSkill: 'Add Skill', addPoolSkillTree: 'Add Skill Tree', addPoolAgent: 'Add Agent', addPoolNode: 'Add Node', addPoolGraph: 'Add Graph', assignToNode: 'Assign to Node', equipSkill: 'Equip Agent', unequipSkill: 'Unequip', deleteSkill: 'Delete Skill', useNodeTemplate: 'Add as Node', applyGraph: 'Apply Graph', applySkillTree: 'Equip Tree', marketplaceContext: 'Current node', activeAgentLabel: 'Selected agent', poolPreview: 'Pool item',
-    skillUsage: 'Skill Usage', skillUsageHelp: 'Shows which skill the agent used and why in user-friendly cards.', noSkillUsage: 'No skills assigned yet.', skillReason: 'Why it was used', skillEvidence: 'Evidence',
+    skillUsage: 'Skill Usage', skillUsageHelp: 'Shown after the war plan graph completes, based on actual node logs and artifacts.', noSkillUsage: 'No completed graph result yet.', skillReason: 'Why it was used', skillEvidence: 'Evidence', resultTab: 'Result', workTab: 'Work', resultReport: 'Result Report', resultPending: 'Complete the graph once to save skill usage rationale and artifacts in this tab.', resultSummary: 'Completion Summary', nodeResults: 'Node Results', resultFilters: 'Result Filters', filterNode: 'Node', filterAgent: 'Agent', filterSkill: 'Skill', filterAll: 'All', filteredResults: 'Showing', noFilteredSkillUsage: 'No skill usage matches this filter combination.',
     overallProgress: 'Overall Progress', clearedNodes: 'Cleared Nodes',
     flow: 'Flow: project open → agent/skill setup → Start → wiki-make by wiki-maker agent → approval-gated destructive command.',
     skillTree: 'OpenCode Skill Tree', selectedAgent: 'Selected agent',
@@ -303,27 +306,117 @@ function renderNodeWorkEditor(node) {
   `;
 }
 
-function renderSkillUsage(node) {
-  const entries = buildSkillUsageSummary(state, node.id);
+function renderResultReport() {
+  const currentReport = buildGraphResultReport(state);
+  const report = currentReport ?? state.resultReports.find((item) => item.sessionId === state.activeSessionId);
+  if (!report) {
+    return `
+      <section class="pixel-panel result-panel" aria-label="${t('resultReport')}">
+        <h2 class="section-title">${t('resultReport')}</h2>
+        <p class="muted">${t('resultPending')}</p>
+      </section>
+    `;
+  }
+  const filteredSkillUsage = filterGraphResultSkillUsage(report, resultFilters);
   return `
-    <div class="skill-usage" aria-label="${t('skillUsage')}">
+    <section class="pixel-panel result-panel" aria-label="${t('resultReport')}">
+      <div class="result-hero">
+        <div>
+          <h2 class="section-title">${t('resultReport')}</h2>
+          <p class="muted">${esc(report.title)} · ${esc(report.sessionId)}</p>
+        </div>
+        <strong>${esc(report.progress.percent)}%</strong>
+      </div>
+      <article class="result-summary">
+        <h3>${t('resultSummary')}</h3>
+        <p>${esc(report.summary)}</p>
+      </article>
+      <div class="skill-usage" aria-label="${t('skillUsage')}">
       <div class="skill-usage-header">
         <h3>${t('skillUsage')}</h3>
         <p class="muted">${t('skillUsageHelp')}</p>
       </div>
+      ${renderResultFilters(report, filteredSkillUsage.length)}
       <div class="skill-usage-grid">
-        ${entries.length ? entries.map((entry) => `
+        ${filteredSkillUsage.length ? filteredSkillUsage.map((entry) => `
           <article class="skill-usage-card">
             <strong>${esc(entry.skillName)}</strong>
-            <span>${esc(entry.agentName)} · ${esc(entry.skillId)}</span>
+            <span>${esc(entry.nodeTitle)} · ${esc(entry.agentName)} · ${esc(entry.skillId)}</span>
             <dl>
               <dt>${t('skillReason')}</dt><dd>${esc(entry.reason)}</dd>
               <dt>${t('skillEvidence')}</dt><dd>${esc(entry.evidence)}</dd>
             </dl>
           </article>
-        `).join('') : `<p class="muted">${t('noSkillUsage')}</p>`}
+        `).join('') : `<p class="muted">${t('noFilteredSkillUsage')}</p>`}
       </div>
     </div>
+      <h3>${t('nodeResults')}</h3>
+      <div class="result-node-grid">
+        ${report.nodes.map((node) => `
+          <article class="result-node-card">
+            <strong>${esc(node.title)}</strong>
+            <span>${esc(node.agentId)} · ${esc(node.status)}</span>
+            <p>${esc(node.result)}</p>
+            <ul>${node.artifacts.map((artifact) => `<li class="artifact">${esc(artifact)}</li>`).join('')}</ul>
+          </article>
+        `).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function renderResultFilters(report, filteredCount) {
+  return `
+    <div class="result-filters" aria-label="${t('resultFilters')}">
+      ${renderResultFilterSelect('nodeId', t('filterNode'), resultFilterOptions(report.skillUsage, 'nodeId', 'nodeTitle'), resultFilters.nodeId)}
+      ${renderResultFilterSelect('agentId', t('filterAgent'), resultFilterOptions(report.skillUsage, 'agentId', 'agentName'), resultFilters.agentId)}
+      ${renderResultFilterSelect('skillId', t('filterSkill'), resultFilterOptions(report.skillUsage, 'skillId', 'skillName'), resultFilters.skillId)}
+      <div class="result-filter-count"><strong>${filteredCount}</strong><span>${t('filteredResults')} / ${report.skillUsage.length}</span></div>
+    </div>
+  `;
+}
+
+function renderResultFilterSelect(filterKey, label, options, value) {
+  return `
+    <label class="result-filter">${label}
+      <select data-result-filter="${esc(filterKey)}">
+        <option value="all" ${value === 'all' ? 'selected' : ''}>${t('filterAll')}</option>
+        ${options.map((option) => `<option value="${esc(option.id)}" ${value === option.id ? 'selected' : ''}>${esc(option.name)} (${option.count})</option>`).join('')}
+      </select>
+    </label>
+  `;
+}
+
+function resultFilterOptions(entries, idKey, nameKey) {
+  return Array.from(entries.reduce((options, entry) => {
+    const id = entry[idKey];
+    const current = options.get(id) ?? { id, name: entry[nameKey] ?? id, count: 0 };
+    options.set(id, { ...current, count: current.count + 1 });
+    return options;
+  }, new Map()).values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function renderMainTab(node, agent) {
+  const tabs = `
+    <div class="main-tabs" role="tablist">
+      <button class="main-tab ${mainTab === 'work' ? 'active' : ''}" data-main-tab="work" aria-pressed="${mainTab === 'work'}">${t('workTab')}</button>
+      <button class="main-tab ${mainTab === 'result' ? 'active' : ''}" data-main-tab="result" aria-pressed="${mainTab === 'result'}">${t('resultTab')}</button>
+    </div>
+  `;
+  if (mainTab === 'result') return `${tabs}${renderResultReport()}`;
+  return `${tabs}
+    ${renderNodeSettingsWidget(node)}
+    <section class="pixel-panel">
+      <h2 class="section-title">${t('skillTree')}</h2>
+      <p class="muted">${t('skillHelp')} ${t('selectedAgent')}: <strong>${esc(agent.name)}</strong></p>
+      <div class="skills">${renderSkills(agent)}</div>
+    </section>
+    ${renderPoolPanel()}
+    <section class="pixel-panel">
+      <h2 class="section-title">${t('wikiMap')}</h2>
+      <p class="muted">${t('wikiHelp')}</p>
+      <div class="wiki-map">${renderWikiMap()}</div>
+    </section>
   `;
 }
 
@@ -348,15 +441,12 @@ function renderNodeSettingsWidget(node) {
           <h3 id="node-title-heading">${esc(node.title)}</h3>
           <p id="node-description-preview">${esc(node.description)}</p>
           <p><strong>${t('usedSkills')}:</strong> ${esc(node.skills.join(', ') || 'none')}</p>
-          ${renderSkillUsage(node)}
           <h2 class="section-title review-title">${t('reviewCenter')}</h2>
           ${renderReviewCenter(node)}
           <h4>${t('friendlyLog')}</h4>
           <div class="log-box">${esc(node.logs.friendly)}</div>
           <h4>${t('rawLog')}</h4>
           <div class="log-box">${esc(node.logs.raw)}</div>
-          <h4>${t('whyUsed')}</h4>
-          <div class="log-box">${esc(node.logs.why)}</div>
           <h4>${t('artifacts')}</h4>
           <ul>${node.logs.artifacts.map((artifact) => `<li class="artifact">${esc(artifact)}</li>`).join('')}</ul>
         </div>
@@ -547,18 +637,7 @@ function render() {
           </div>
           <div class="graph" aria-label="Diablo-style war plan graph">${renderGraph()}</div>
         </section>
-        ${renderNodeSettingsWidget(node)}
-        <section class="pixel-panel">
-          <h2 class="section-title">${t('skillTree')}</h2>
-          <p class="muted">${t('skillHelp')} ${t('selectedAgent')}: <strong>${esc(agent.name)}</strong></p>
-          <div class="skills">${renderSkills(agent)}</div>
-        </section>
-        ${renderPoolPanel()}
-        <section class="pixel-panel">
-          <h2 class="section-title">${t('wikiMap')}</h2>
-          <p class="muted">${t('wikiHelp')}</p>
-          <div class="wiki-map">${renderWikiMap()}</div>
-        </section>
+        ${renderMainTab(node, agent)}
         ${renderBridgeEvents()}
       </main>
 
@@ -585,7 +664,19 @@ function bindEvents() {
   document.querySelector('#start-session')?.addEventListener('click', () => save(startTutorialSession(state)));
   document.querySelector('#add-node')?.addEventListener('click', () => save(addWarPlanNode(state)));
   document.querySelector('#remove-node')?.addEventListener('click', () => save(removeWarPlanNode(state, state.selectedNodeId)));
-  document.querySelector('#approve-node')?.addEventListener('click', () => save(approveDestructiveNode(state, state.selectedNodeId)));
+  document.querySelector('#approve-node')?.addEventListener('click', () => {
+    const next = approveDestructiveNode(state, state.selectedNodeId);
+    if (buildGraphResultReport(next)) mainTab = 'result';
+    save(next);
+  });
+  document.querySelectorAll('[data-main-tab]').forEach((element) => element.addEventListener('click', () => {
+    mainTab = element.dataset.mainTab;
+    render();
+  }));
+  document.querySelectorAll('[data-result-filter]').forEach((element) => element.addEventListener('change', (event) => {
+    resultFilters = { ...resultFilters, [element.dataset.resultFilter]: event.target.value };
+    render();
+  }));
   document.querySelector('#add-pool-skill')?.addEventListener('click', () => save(addPoolSkill(state)));
   document.querySelector('#add-pool-skill-tree')?.addEventListener('click', () => save(addPoolSkillTree(state)));
   document.querySelector('#add-pool-agent')?.addEventListener('click', () => save(addPoolAgent(state)));
