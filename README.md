@@ -37,7 +37,8 @@ npm run build
 - Select existing OpenCode-style markdown skills in the RPG skill tree.
 - Start the tutorial war-plan graph.
 - The graph runs `Start` and `wiki-make` with the default `wiki-maker` agent.
-- Node details show friendly logs, raw OpenCode bridge events, artifacts, used skills, and why-used explanations.
+- Node details show assigned skills, friendly logs, raw OpenCode bridge events, and artifacts while work is being configured or running.
+- The Result tab stores the completed war-plan report, including which skills were actually used and why, after the graph finishes.
 - Destructive command nodes pause behind an approval gate.
 - Sessions can be created and forked.
 - The LLM Wiki surface visualizes `llm_wiki` concepts as a local-first RPG world map.

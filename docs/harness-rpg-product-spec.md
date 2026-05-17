@@ -28,7 +28,8 @@ Harness RPG is an OpenCode-powered agent workbench that makes autonomous develop
 The current prototype models these reasons with:
 
 - a war-plan graph with node-level agents and logs;
-- node details showing friendly logs, raw logs, artifacts, used skills, and why-used explanations;
+- node details showing assigned skills, friendly logs, raw logs, and artifacts during configuration or execution;
+- a persistent Result report showing completed skill usage and why-used explanations after the full graph finishes;
 - agent cards, Agent.md editing, and skill selection;
 - session/fork affordances;
 - Korean-first human UI with English agent markdown preserved.
