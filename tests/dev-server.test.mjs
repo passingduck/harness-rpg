@@ -37,3 +37,28 @@ test('writeWorkspaceFiles persists relative project files and rejects path escap
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('writeWorkspaceFiles removes stale static graph node markdown files', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'harness-rpg-'));
+
+  try {
+    await writeWorkspaceFiles(root, {
+      '.harness-rpg/graphs/current/GRAPH.md': '# Graph\n',
+      '.harness-rpg/graphs/current/01_START_NODE.md': '# Start\n',
+      '.harness-rpg/graphs/current/02_WIKI_MAKE_NODE.md': '# Wiki\n',
+    });
+    await writeWorkspaceFiles(root, {
+      '.harness-rpg/graphs/current/GRAPH.md': '# Graph\n',
+      '.harness-rpg/graphs/current/01_START_NODE.md': '# Start\n',
+    });
+
+    const graph = await readFile(join(root, '.harness-rpg/graphs/current/GRAPH.md'), 'utf8');
+    await assert.rejects(
+      () => readFile(join(root, '.harness-rpg/graphs/current/02_WIKI_MAKE_NODE.md'), 'utf8'),
+      /ENOENT/,
+    );
+    assert.equal(graph, '# Graph\n');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

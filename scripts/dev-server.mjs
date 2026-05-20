@@ -1,6 +1,6 @@
 import { createServer as createHttpServer } from 'node:http';
 import { createServer as createNetServer } from 'node:net';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -45,10 +45,32 @@ export async function writeWorkspaceFiles(projectRoot, files) {
     return [target, String(content)];
   });
 
+  await removeStaleGraphNodeFiles(normalizedRoot, files);
+
   for (const [target, content] of prepared) {
     await mkdir(resolve(target, '..'), { recursive: true });
     await writeFile(target, content, 'utf8');
   }
+}
+
+async function removeStaleGraphNodeFiles(projectRoot, files) {
+  const graphDir = resolve(projectRoot, '.harness-rpg/graphs/current');
+  const expected = new Set(Object.keys(files)
+    .filter((relativePath) => relativePath.startsWith('.harness-rpg/graphs/current/'))
+    .map((relativePath) => resolve(projectRoot, normalize(relativePath))));
+  if (!expected.size) return;
+  let entries;
+  try {
+    entries = await readdir(graphDir);
+  } catch (error) {
+    if (error.code === 'ENOENT') return;
+    throw error;
+  }
+  await Promise.all(entries
+    .filter((entry) => /^\d{2}_.+_NODE\.md$/.test(entry))
+    .map((entry) => resolve(graphDir, entry))
+    .filter((target) => !expected.has(target))
+    .map((target) => unlink(target)));
 }
 
 export function createDevServer(projectRoot = rootDir) {
