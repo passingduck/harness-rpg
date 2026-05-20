@@ -21,4 +21,11 @@ for (const marker of ['Harness RPG', 'app.js', 'styles.css']) {
   }
 }
 
+const app = await readFile('app/app.js', 'utf8');
+for (const marker of ["'skill-tree', 'skillTree'", "'market', 'pools'", "'wiki', 'wikiMap'"]) {
+  if (!app.includes(marker)) {
+    throw new Error(`Missing ${marker} in app/app.js`);
+  }
+}
+
 console.log('Build check passed');

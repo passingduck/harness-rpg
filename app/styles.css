@@ -130,6 +130,15 @@ textarea { width: 100%; min-height: 210px; background: #0e0e0e; color: var(--gre
 .node-settings-side h3 { color: var(--gold); margin: 0 0 .5rem; }
 .node-settings-side p { overflow-wrap: anywhere; line-height: 1.45; }
 .work-editor { border: 3px solid var(--line-dark); background: linear-gradient(135deg, rgba(159,202,255,.08), transparent 55%), #0e0e0e; padding: .75rem; margin: 1rem 0; }
+.node-agent-picker { border: 3px solid var(--line-dark); background: rgba(14,14,14,.72); padding: .75rem; margin-bottom: 1rem; }
+.node-agent-picker h3 { color: var(--gold); margin: 0 0 .35rem; text-transform: uppercase; }
+.node-agent-picker p { margin: 0 0 .65rem; }
+.node-agent-grid { display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: .55rem; }
+.node-agent-choice { display: grid; grid-template-columns: auto 1fr; gap: .5rem; align-items: start; margin: 0; border: 2px solid var(--line-dark); background: rgba(32,32,31,.86); padding: .55rem; cursor: pointer; }
+.node-agent-choice.selected { border-color: var(--gold); box-shadow: inset 0 0 14px rgba(255,219,60,.1); }
+.node-agent-choice input { width: auto; margin: .15rem 0 0; accent-color: var(--gold); }
+.node-agent-choice strong { color: var(--green); display: block; }
+.node-agent-choice small { color: var(--muted); display: block; line-height: 1.3; }
 .work-editor-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: start; margin-bottom: .75rem; }
 .work-editor-header h3 { color: var(--gold); margin: 0 0 .3rem; text-transform: uppercase; }
 .work-editor-header p { margin: 0; line-height: 1.4; }
@@ -215,6 +224,6 @@ select:disabled { opacity: .65; color: var(--muted); }
   .shell { grid-template-columns: 1fr; }
   .sidebar, .inspector { border: 0; max-height: none; }
   .skills { grid-template-columns: repeat(2, 1fr); }
-  .node-settings-grid, .pool-grid, .market-grid, .result-node-grid, .result-filters { grid-template-columns: 1fr; }
+  .node-settings-grid, .pool-grid, .market-grid, .result-node-grid, .result-filters, .node-agent-grid { grid-template-columns: 1fr; }
   .result-filter-count { justify-items: start; border-left: 0; border-top: 2px solid var(--line-dark); padding: .7rem 0 0; }
 }

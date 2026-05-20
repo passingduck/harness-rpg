@@ -3,6 +3,7 @@ import {
   serializeState,
   assignSkillToAgent,
   assignAgentToNode,
+  toggleAgentForNode,
   canRemoveWarPlanNode,
   updateNodeText,
   buildNodeWorkMarkdown,
@@ -66,7 +67,7 @@ const copy = {
     skillHelp: '기존 OpenCode markdown 스킬은 영어 원문을 유지하고, UI만 번역합니다.',
     wikiMap: 'LLM Wiki 월드맵', wikiHelp: 'llm_wiki 개념을 host-agent skill로 포팅: ingest, query, lint, graph, gap detection, deep research, review actions, wikilink enrichment.',
     agentEditor: 'Agent.md 편집기', profileEditor: '프로필 편집', agentName: '에이전트 이름', profileImage: '프로필 이미지 URL', feedback: '앱 피드백',
-    nodeDetail: '노드 상세', nodeTitle: '노드명', nodeDescription: '노드 설명', status: '상태', agent: '에이전트', nodeOwner: '담당 에이전트', systemNode: '시스템 노드는 담당자를 바꿀 수 없습니다.', usedSkills: '사용 스킬', friendlyLog: '친화 로그', rawLog: '원본 로그', whyUsed: '사용 이유', artifacts: '산출물',
+    nodeDetail: '노드 상세', nodeTitle: '노드명', nodeDescription: '노드 설명', status: '상태', agent: '에이전트', nodeOwner: '담당 에이전트', nodeAgentsHelp: '한 노드에 여러 Agent를 정적으로 배정할 수 있습니다. 첫 번째 선택 Agent가 실행 대표 Agent입니다.', systemNode: '시스템 노드는 담당자를 바꿀 수 없습니다.', usedSkills: '사용 스킬', friendlyLog: '친화 로그', rawLog: '원본 로그', whyUsed: '사용 이유', artifacts: '산출물',
     reviewCenter: '리뷰 센터', reviewSummary: '요약', reviewPlan: '계획', reviewSpec: '스펙', reviewLog: '로그', reviewDiff: '변경점', reviewResult: '결과',
     level: '레벨', xp: '경험치', language: 'English UI', markdownNote: 'Agent가 읽는 markdown은 영어로 유지됩니다.',
   },
@@ -88,7 +89,7 @@ const copy = {
     skillHelp: 'Existing OpenCode markdown skills stay in English; only the human UI is localized.',
     wikiMap: 'LLM Wiki World Map', wikiHelp: 'llm_wiki concepts ported as host-agent skills: ingest, query, lint, graph, gap detection, deep research, review actions, wikilink enrichment.',
     agentEditor: 'Agent.md Editor', profileEditor: 'Profile Editor', agentName: 'Agent name', profileImage: 'Profile image URL', feedback: 'App Feedback',
-    nodeDetail: 'Node Detail', nodeTitle: 'Node title', nodeDescription: 'Node description', status: 'Status', agent: 'Agent', nodeOwner: 'Node Agent', systemNode: 'System nodes cannot be reassigned.', usedSkills: 'Used skills', friendlyLog: 'Friendly Log', rawLog: 'Raw Log', whyUsed: 'Why Used', artifacts: 'Artifacts',
+    nodeDetail: 'Node Detail', nodeTitle: 'Node title', nodeDescription: 'Node description', status: 'Status', agent: 'Agent', nodeOwner: 'Node Agents', nodeAgentsHelp: 'Assign multiple agents to one node statically. The first selected agent is the execution lead.', systemNode: 'System nodes cannot be reassigned.', usedSkills: 'Used skills', friendlyLog: 'Friendly Log', rawLog: 'Raw Log', whyUsed: 'Why Used', artifacts: 'Artifacts',
     reviewCenter: 'Review Center', reviewSummary: 'Summary', reviewPlan: 'Plan', reviewSpec: 'Spec', reviewLog: 'Log', reviewDiff: 'Diff', reviewResult: 'Result',
     level: 'Level', xp: 'XP', language: '한국어 UI', markdownNote: 'Markdown read by agents remains English.',
   },
@@ -272,12 +273,20 @@ function renderNodeAgentSelect(node) {
   if (node.agentId === 'System') {
     return `<label>${t('nodeOwner')}<select id="node-agent" disabled><option>System</option></select><small class="muted">${t('systemNode')}</small></label>`;
   }
+  const agentIds = new Set(node.agentIds?.length ? node.agentIds : [node.agentId]);
   return `
-    <label>${t('nodeOwner')}
-      <select id="node-agent">
-        ${state.agents.map((agent) => `<option value="${esc(agent.id)}" ${agent.id === node.agentId ? 'selected' : ''}>${esc(agent.name)} · ${esc(agent.className)}</option>`).join('')}
-      </select>
-    </label>
+    <div class="node-agent-picker" aria-label="${t('nodeOwner')}">
+      <h3>${t('nodeOwner')}</h3>
+      <p class="muted">${t('nodeAgentsHelp')}</p>
+      <div class="node-agent-grid">
+        ${state.agents.map((agent) => `
+          <label class="node-agent-choice ${agentIds.has(agent.id) ? 'selected' : ''}">
+            <input type="checkbox" data-node-agent-id="${esc(agent.id)}" ${agentIds.has(agent.id) ? 'checked' : ''} />
+            <span><strong>${esc(agent.name)}</strong><small>${esc(agent.className)}</small></span>
+          </label>
+        `).join('')}
+      </div>
+    </div>
   `;
 }
 
@@ -355,7 +364,7 @@ function renderResultReport() {
         ${report.nodes.map((node) => `
           <article class="result-node-card">
             <strong>${esc(node.title)}</strong>
-            <span>${esc(node.agentId)} · ${esc(node.status)}</span>
+            <span>${esc((node.agentIds ?? [node.agentId]).join(', '))} · ${esc(node.status)}</span>
             <p>${esc(node.result)}</p>
             <ul>${node.artifacts.map((artifact) => `<li class="artifact">${esc(artifact)}</li>`).join('')}</ul>
           </article>
@@ -397,21 +406,36 @@ function resultFilterOptions(entries, idKey, nameKey) {
 }
 
 function renderMainTab(node, agent) {
-  const tabs = `
-    <div class="main-tabs" role="tablist">
-      <button class="main-tab ${mainTab === 'work' ? 'active' : ''}" data-main-tab="work" aria-pressed="${mainTab === 'work'}">${t('workTab')}</button>
-      <button class="main-tab ${mainTab === 'result' ? 'active' : ''}" data-main-tab="result" aria-pressed="${mainTab === 'result'}">${t('resultTab')}</button>
-    </div>
-  `;
-  if (mainTab === 'result') return `${tabs}${renderResultReport()}`;
-  return `${tabs}
-    ${renderNodeSettingsWidget(node)}
+  const tabs = [
+    ['work', 'workTab'],
+    ['result', 'resultTab'],
+    ['skill-tree', 'skillTree'],
+    ['market', 'pools'],
+    ['wiki', 'wikiMap'],
+  ];
+  const tabButtons = tabs.map(([tab, labelKey]) => `
+    <button class="main-tab ${mainTab === tab ? 'active' : ''}" data-main-tab="${tab}" aria-pressed="${mainTab === tab}">${t(labelKey)}</button>
+  `).join('');
+  const tabShell = `<div class="main-tabs" role="tablist">${tabButtons}</div>`;
+  if (mainTab === 'result') return `${tabShell}${renderResultReport()}`;
+  if (mainTab === 'skill-tree') return `${tabShell}${renderSkillTreePanel(agent)}`;
+  if (mainTab === 'market') return `${tabShell}${renderPoolPanel()}`;
+  if (mainTab === 'wiki') return `${tabShell}${renderWikiPanel()}`;
+  return `${tabShell}${renderNodeSettingsWidget(node)}`;
+}
+
+function renderSkillTreePanel(agent) {
+  return `
     <section class="pixel-panel">
       <h2 class="section-title">${t('skillTree')}</h2>
       <p class="muted">${t('skillHelp')} ${t('selectedAgent')}: <strong>${esc(agent.name)}</strong></p>
       <div class="skills">${renderSkills(agent)}</div>
     </section>
-    ${renderPoolPanel()}
+  `;
+}
+
+function renderWikiPanel() {
+  return `
     <section class="pixel-panel">
       <h2 class="section-title">${t('wikiMap')}</h2>
       <p class="muted">${t('wikiHelp')}</p>
@@ -500,8 +524,9 @@ function renderMarketplaceShelf(pools, node, agent) {
 }
 
 function renderAgentMarketplace(agents, node) {
+  const nodeAgentIds = new Set(node.agentIds?.length ? node.agentIds : [node.agentId]);
   return `<div class="market-grid">${agents.map((agent) => `
-    <article class="market-card ${agent.id === node.agentId ? 'chosen' : ''}">
+    <article class="market-card ${nodeAgentIds.has(agent.id) ? 'chosen' : ''}">
       <small>${t('poolPreview')}</small>
       <h3>${esc(agent.name)}</h3>
       <p>${esc(agent.className)}</p>
@@ -717,6 +742,7 @@ function bindEvents() {
     syncNodeWorkMarkdownPreview();
   }));
   document.querySelector('#node-agent')?.addEventListener('change', (event) => save(assignAgentToNode(state, state.selectedNodeId, event.target.value)));
+  document.querySelectorAll('[data-node-agent-id]').forEach((element) => element.addEventListener('change', () => save(toggleAgentForNode(state, state.selectedNodeId, element.dataset.nodeAgentId))));
   document.querySelectorAll('[data-agent-id]').forEach((element) => element.addEventListener('click', () => save(selectAgent(state, element.dataset.agentId))));
   document.querySelectorAll('[data-skill-id]').forEach((element) => element.addEventListener('click', () => save(assignSkillToAgent(state, state.activeAgentId, element.dataset.skillId))));
   document.querySelectorAll('[data-node-id]').forEach((element) => element.addEventListener('click', () => save(selectNode(state, element.dataset.nodeId))));
