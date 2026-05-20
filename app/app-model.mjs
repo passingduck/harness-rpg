@@ -257,6 +257,7 @@ function poolNodeFromGraphNode(nodeItem) {
     title: nodeItem.title,
     description: nodeItem.description,
     agentId: nodeItem.agentId,
+    agentIds: [...(nodeItem.agentIds ?? [nodeItem.agentId])],
     skills: [...(nodeItem.skills ?? [])],
     destructive: nodeItem.destructive === true,
     position: nodeItem.position ? { ...nodeItem.position } : undefined,
@@ -282,6 +283,7 @@ function node(id, title, agentId, skills, status, description, destructive = fal
     id,
     title,
     agentId,
+    agentIds: agentId === 'System' ? [] : [agentId],
     skills,
     status,
     description,
@@ -326,8 +328,11 @@ function createDefaultWorkSections({ description, destructive = false }) {
 
 function createReviewBundle(nodeItem, completed = false) {
   const skillText = nodeItem.skills.length ? nodeItem.skills.join(', ') : 'none';
+  const agentIds = nodeAgentIds(nodeItem);
+  const agentText = agentIds.length > 1 ? `Agents ${agentIds.join(', ')} own` : `Agent ${agentIds[0] ?? nodeItem.agentId} owns`;
+  const completedAgentText = agentIds.length > 1 ? `${agentIds.join(', ')} agents` : `${agentIds[0] ?? nodeItem.agentId} agent`;
   const resultText = completed
-    ? `${nodeItem.title} completed by ${nodeItem.agentId} agent with ${skillText}.`
+    ? `${nodeItem.title} completed by ${completedAgentText} with ${skillText}.`
     : `${nodeItem.title} is waiting for execution.`;
   const diffText = completed && nodeItem.id === 'wiki-make'
     ? 'Diff: Added wiki/index.md, wiki/overview.md, and concepts/opencode-bridge.md to the project wiki artifact set.'
@@ -337,7 +342,7 @@ function createReviewBundle(nodeItem, completed = false) {
 
   return {
     plan: `Plan: ${nodeItem.description}`,
-    spec: `Spec: Agent ${nodeItem.agentId} owns this graph node and may use ${skillText}.`,
+    spec: `Spec: ${agentText} this graph node and may use ${skillText}.`,
     log: completed
       ? `Log: ${nodeItem.title} finished through the OpenCode MCP bridge.`
       : `Log: ${nodeItem.title} has not started yet.`,
@@ -396,7 +401,7 @@ export function assignAgentToNode(state, nodeId, agentId) {
       ...state.graph,
       nodes: state.graph.nodes.map((nodeItem) => {
         if (nodeItem.id !== nodeId || nodeItem.agentId === 'System') return nodeItem;
-        const updatedNode = { ...nodeItem, agentId };
+        const updatedNode = { ...nodeItem, agentId, agentIds: [agentId] };
         return {
           ...updatedNode,
           review: {
@@ -407,6 +412,23 @@ export function assignAgentToNode(state, nodeId, agentId) {
       }),
     },
   };
+}
+
+export function toggleAgentForNode(state, nodeId, agentId) {
+  if (!state.agents.some((agent) => agent.id === agentId)) return state;
+  return updateGraphNode(state, nodeId, (nodeItem) => {
+    if (nodeItem.agentId === 'System') return nodeItem;
+    const currentAgentIds = nodeAgentIds(nodeItem);
+    const nextAgentIds = currentAgentIds.includes(agentId)
+      ? currentAgentIds.filter((id) => id !== agentId)
+      : [...currentAgentIds, agentId];
+    const agentIds = nextAgentIds.length ? nextAgentIds : [agentId];
+    return {
+      ...nodeItem,
+      agentId: agentIds[0],
+      agentIds,
+    };
+  });
 }
 
 export function updateNodeText(state, nodeId, text) {
@@ -465,9 +487,7 @@ export function removeNodeWorkSection(state, nodeId, sectionId) {
 
 export function buildNodeWorkMarkdown(state, nodeId) {
   const nodeItem = state.graph.nodes.find((node) => node.id === nodeId) ?? state.graph.nodes[0];
-  const agent = state.agents.find((item) => item.id === nodeItem.agentId);
-  const resolvedAgentId = resolveNodeAgentId(state, nodeItem);
-  const agentText = agent ? `${agent.name} (${agent.id})` : `${resolvedAgentId} (${nodeItem.agentId} missing)`;
+  const agentText = nodeAgentLabels(state, nodeItem).join(', ') || 'System';
   const skillText = nodeItem.skills.length ? nodeItem.skills.join(', ') : 'none';
   const sections = normalizeWorkSections(nodeItem.workSections, nodeItem);
   const sectionText = sections.length
@@ -481,7 +501,7 @@ export function buildNodeWorkMarkdown(state, nodeId) {
     '',
     '## Assignment',
     '',
-    `- Agent: ${agentText}`,
+    `- Assigned Agents: ${agentText}`,
     `- Skills: ${skillText}`,
     `- Destructive step: ${nodeItem.destructive ? 'yes, require explicit approval' : 'no'}`,
     '',
@@ -500,7 +520,7 @@ export function buildNodeWorkMarkdown(state, nodeId) {
 export function buildOuroborosProtocolPayload(state) {
   const graphSchema = {
     protocol: 'harness-rpg-war-plan-v1',
-    nodeFields: ['id', 'title', 'description', 'agentId', 'skills', 'status', 'destructive'],
+    nodeFields: ['id', 'title', 'description', 'agentId', 'agentIds', 'skills', 'status', 'destructive'],
     edgeShape: { type: 'tuple', items: ['fromNodeId', 'toNodeId'] },
     protectedNodes: ['start'],
   };
@@ -695,7 +715,7 @@ export function togglePoolSkillForAgent(state, agentId, skillId, nodeId = '') {
   const graph = nodeId ? {
     ...toggled.graph,
     nodes: toggled.graph.nodes.map((nodeItem) => {
-      if (nodeItem.id !== nodeId || nodeItem.agentId !== agentId) return nodeItem;
+      if (nodeItem.id !== nodeId || !nodeAgentIds(nodeItem).includes(agentId)) return nodeItem;
       const skills = hasSkill
         ? Array.from(new Set([...nodeItem.skills, skillId]))
         : nodeItem.skills.filter((id) => id !== skillId);
@@ -735,7 +755,7 @@ export function applyPoolSkillTreeToAgent(state, agentId, skillTreeId, nodeId = 
     graph: nodeId ? {
       ...state.graph,
       nodes: state.graph.nodes.map((nodeItem) => {
-        if (nodeItem.id !== nodeId || nodeItem.agentId !== agentId) return nodeItem;
+        if (nodeItem.id !== nodeId || !nodeAgentIds(nodeItem).includes(agentId)) return nodeItem;
         return refreshNodeReview({
           ...nodeItem,
           skills: Array.from(new Set([...nodeItem.skills, ...skillIds])),
@@ -764,7 +784,9 @@ export function instantiatePoolNode(state, poolNodeId) {
     template.description,
     template.destructive === true,
   );
-  const positionedNode = template.position ? { ...graphNode, position: { ...template.position } } : graphNode;
+  const templateAgentIds = Array.isArray(template.agentIds) ? template.agentIds.filter((agentId) => state.agents.some((agent) => agent.id === agentId)) : [];
+  const assignedNode = templateAgentIds.length ? { ...graphNode, agentId: templateAgentIds[0], agentIds: templateAgentIds } : graphNode;
+  const positionedNode = template.position ? { ...assignedNode, position: { ...template.position } } : assignedNode;
   return {
     ...state,
     selectedNodeId: id,
@@ -829,21 +851,19 @@ export function removePoolSkill(state, skillId) {
 }
 
 export function buildGraphMarkdown(state) {
-  const graphPool = normalizePools(state.pools, state).graphs[0];
-  const nodeRows = state.graph.nodes.map((nodeItem, index) => {
-    const agent = state.agents.find((item) => item.id === nodeItem.agentId);
-    const skills = nodeItem.skills.length ? nodeItem.skills.join(', ') : 'none';
-    return `${index + 1}. [${nodeItem.title}](./${graphNodeFileName(nodeItem, index)}) — ${nodeItem.status} — ${agent?.name ?? nodeItem.agentId} — skills: ${skills}`;
-  });
+  const nodeRows = state.graph.nodes.map((nodeItem, index) => `${index + 1}. [${nodeItem.id}](./${graphNodeFileName(nodeItem, index)})`);
   const edgeRows = state.graph.edges.map(([from, to]) => `- ${from} --> ${to}`);
+  const adjacencyRows = state.graph.nodes.map((nodeItem) => {
+    const outgoing = state.graph.edges.filter(([from]) => from === nodeItem.id).map(([, to]) => to);
+    return `- ${nodeItem.id}: ${outgoing.join(', ') || 'none'}`;
+  });
   return [
-    '# Harness RPG Visible Graph',
+    '# Harness RPG Static Connectivity',
     '',
-    '> Generated from the graph currently shown in the front-end. Agents should treat this as the navigable work map.',
+    '> Generated deterministically from the front-end graph state. This file contains connectivity only; node details live in the linked NODE files.',
     '',
-    '## Pool Source',
+    '## Summary',
     '',
-    `- Graph pool: ${graphPool.name} (${graphPool.id})`,
     `- Node count: ${state.graph.nodes.length}`,
     `- Edge count: ${state.graph.edges.length}`,
     '',
@@ -855,11 +875,9 @@ export function buildGraphMarkdown(state) {
     '',
     ...(edgeRows.length ? edgeRows : ['_No edges yet._']),
     '',
-    '## Agent Contract',
+    '## Connectivity',
     '',
-    '- Open the linked node markdown before acting on a node.',
-    '- Preserve node IDs when reporting progress back to Harness RPG.',
-    '- Include skill usage and verification evidence in the node result.',
+    ...adjacencyRows,
   ].join('\n');
 }
 
@@ -878,6 +896,7 @@ export function buildGraphNodeMarkdown(state, nodeId, index = state.graph.nodes.
     '',
     `- Node ID: ${nodeItem.id}`,
     `- Status: ${nodeItem.status}`,
+    `- Assigned Agents: ${nodeAgentLabels(state, nodeItem).join(', ') || 'System'}`,
     `- Incoming: ${incoming.join(', ') || 'none'}`,
     `- Outgoing: ${outgoing.join(', ') || 'none'}`,
     '',
@@ -887,9 +906,9 @@ export function buildGraphNodeMarkdown(state, nodeId, index = state.graph.nodes.
 
 export function buildSkillUsageSummary(state, nodeId) {
   const nodeItem = state.graph.nodes.find((node) => node.id === nodeId) ?? state.graph.nodes[0];
-  const resolvedAgentId = resolveNodeAgentId(state, nodeItem);
-  const agent = state.agents.find((item) => item.id === resolvedAgentId) ?? state.agents.find((item) => item.id === nodeItem.agentId);
-  return nodeItem.skills.map((skillId) => {
+  const resolvedAgentIds = resolveNodeAgentIds(state, nodeItem);
+  return nodeItem.skills.flatMap((skillId) => resolvedAgentIds.map((resolvedAgentId) => {
+    const agent = state.agents.find((item) => item.id === resolvedAgentId) ?? state.agents.find((item) => item.id === nodeItem.agentId);
     const skill = state.skills.find((item) => item.id === skillId);
     return {
       skillId,
@@ -903,7 +922,7 @@ export function buildSkillUsageSummary(state, nodeId) {
           ? `${nodeItem.title} is waiting for approval before the skill can finish.`
           : `${nodeItem.title} has not run yet; this skill is assigned for the next execution.`,
     };
-  });
+  }));
 }
 
 export function buildGraphResultReport(state) {
@@ -927,6 +946,7 @@ export function buildGraphResultReport(state) {
       title: nodeItem.title,
       status: nodeItem.status,
       agentId: resolveNodeAgentId(state, nodeItem),
+      agentIds: resolveNodeAgentIds(state, nodeItem),
       artifacts: [...nodeItem.logs.artifacts],
       result: nodeItem.review.result,
     })),
@@ -1078,11 +1098,17 @@ function refreshNodeReview(nodeItem, summary) {
 }
 
 function specNode(baseNode, incoming, agentIds) {
+  const incomingAgentIds = Array.isArray(incoming.agentIds)
+    ? incoming.agentIds.filter((agentId) => agentIds.has(agentId))
+    : [];
+  const primaryAgentId = agentIds.has(incoming.agentId) ? incoming.agentId : incomingAgentIds[0] ?? baseNode.agentId;
+  const assignedAgentIds = Array.from(new Set([primaryAgentId, ...incomingAgentIds]));
   return refreshNodeReview({
     ...baseNode,
     title: incoming.title ?? baseNode.title,
     description: incoming.description ?? baseNode.description,
-    agentId: agentIds.has(incoming.agentId) ? incoming.agentId : baseNode.agentId,
+    agentId: primaryAgentId,
+    agentIds: assignedAgentIds,
     skills: Array.isArray(incoming.skills) ? incoming.skills : baseNode.skills,
     status: 'idle',
     destructive: incoming.destructive ?? baseNode.destructive,
@@ -1107,6 +1133,7 @@ function normalizeSpecNodes(state, nodes) {
       title: truncateText(nodeItem.title ?? nodeItem.id, maxNodeTitleLength),
       description: truncateText(nodeItem.description ?? 'Imported from Ouroboros war-plan spec.', maxNodeDescriptionLength),
       skills: Array.isArray(nodeItem.skills) ? nodeItem.skills.filter((skillId) => skillIds.has(skillId)) : [],
+      agentIds: Array.isArray(nodeItem.agentIds) ? nodeItem.agentIds.filter((agentId) => nodeIdPattern.test(agentId)) : undefined,
       destructive: nodeItem.destructive === true,
     }];
   });
@@ -1219,10 +1246,30 @@ function sanitizeWorkSectionLabel(value, fallback) {
 }
 
 function resolveNodeAgentId(state, nodeItem) {
-  if (!nodeItem || nodeItem.agentId === 'System') return 'System';
-  if (state.agents.some((agent) => agent.id === nodeItem.agentId)) return nodeItem.agentId;
-  if (nodeItem.id === 'start' || nodeItem.skills.includes('ouroboros-plan')) return 'auto-planner';
-  return nodeItem.agentId;
+  const [agentId] = resolveNodeAgentIds(state, nodeItem);
+  return agentId ?? nodeItem?.agentId ?? 'System';
+}
+
+function resolveNodeAgentIds(state, nodeItem) {
+  if (!nodeItem || nodeItem.agentId === 'System') return ['System'];
+  const validAgentIds = new Set(state.agents.map((agent) => agent.id));
+  const assignedAgentIds = nodeAgentIds(nodeItem).filter((agentId) => validAgentIds.has(agentId));
+  if (assignedAgentIds.length) return assignedAgentIds;
+  if (nodeItem.id === 'start' || nodeItem.skills.includes('ouroboros-plan')) return ['auto-planner'];
+  return [nodeItem.agentId];
+}
+
+function nodeAgentIds(nodeItem) {
+  if (!nodeItem || nodeItem.agentId === 'System') return [];
+  const ids = Array.isArray(nodeItem.agentIds) && nodeItem.agentIds.length ? nodeItem.agentIds : [nodeItem.agentId];
+  return Array.from(new Set(ids.filter(Boolean)));
+}
+
+function nodeAgentLabels(state, nodeItem) {
+  return nodeAgentIds(nodeItem).map((agentId) => {
+    const agent = state.agents.find((item) => item.id === agentId);
+    return agent ? `${agent.name} (${agent.id})` : `${agentId} (missing)`;
+  });
 }
 
 function protocolNode(nodeItem) {
@@ -1231,6 +1278,7 @@ function protocolNode(nodeItem) {
     title: nodeItem.title,
     description: nodeItem.description,
     agentId: nodeItem.agentId,
+    agentIds: nodeAgentIds(nodeItem),
     skills: [...nodeItem.skills],
     status: nodeItem.status,
     destructive: nodeItem.destructive,
@@ -1261,7 +1309,9 @@ export function startTutorialSession(state) {
 }
 
 function awardClearedNodeExperience(agents, nodes) {
-  return nodes.reduce((currentAgents, nodeItem) => awardAgentExperience(currentAgents, nodeItem.agentId), agents);
+  return nodes.reduce((currentAgents, nodeItem) => {
+    return nodeAgentIds(nodeItem).reduce((awardedAgents, agentId) => awardAgentExperience(awardedAgents, agentId), currentAgents);
+  }, agents);
 }
 
 function awardAgentExperience(agents, agentId) {
@@ -1327,10 +1377,9 @@ function appendBridgeEvent(state, event) {
 function completeGraphNode(state, nodeId) {
   const clearedNode = state.graph.nodes.find((nodeItem) => nodeItem.id === nodeId);
   const resolvedAgentId = resolveNodeAgentId(state, clearedNode);
-  const canAwardExperience = state.agents.some((agent) => agent.id === resolvedAgentId);
   const nextState = {
     ...state,
-    agents: clearedNode && resolvedAgentId !== 'System' && canAwardExperience ? awardClearedNodeExperience(state.agents, [{ ...clearedNode, agentId: resolvedAgentId }]) : state.agents,
+    agents: clearedNode && resolvedAgentId !== 'System' ? awardClearedNodeExperience(state.agents, [clearedNode]) : state.agents,
     graph: {
       ...state.graph,
       nodes: state.graph.nodes.map((nodeItem) => nodeItem.id === nodeId ? completeNode(nodeItem, resolvedAgentId) : nodeItem),
@@ -1470,6 +1519,7 @@ function migrateGraphNode(nodeItem, defaults) {
     : migratedNode;
   return {
     ...plannerStartNode,
+    agentIds: nodeAgentIds(plannerStartNode),
     workSections: normalizeWorkSections(plannerStartNode.workSections, plannerStartNode),
   };
 }

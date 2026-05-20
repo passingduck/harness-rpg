@@ -17,6 +17,7 @@ import {
   addWarPlanNode,
   removeWarPlanNode,
   assignAgentToNode,
+  toggleAgentForNode,
   applyWarPlanSpec,
   updateNodeText,
   canRemoveWarPlanNode,
@@ -42,6 +43,7 @@ import {
   buildSkillUsageSummary,
   buildGraphResultReport,
   filterGraphResultSkillUsage,
+  buildOuroborosProtocolPayload,
 } from '../app/app-model.mjs';
 
 test('initial state exposes tutorial graph with wiki-make assigned to wiki-maker agent', () => {
@@ -231,7 +233,22 @@ test('assignAgentToNode changes a node owner and refreshes its review spec', () 
   const node = updated.graph.nodes.find((item) => item.id === 'wiki-make');
 
   assert.equal(node.agentId, 'adversarial-qa');
+  assert.deepEqual(node.agentIds, ['adversarial-qa']);
   assert.match(node.review.spec, /Agent adversarial-qa owns this graph node/);
+});
+
+test('toggleAgentForNode supports multiple static agents on one node', () => {
+  let state = createInitialState();
+  state = toggleAgentForNode(state, 'wiki-make', 'forge-master');
+  state = toggleAgentForNode(state, 'wiki-make', 'responsive-ui-ux');
+  state = toggleAgentForNode(state, 'wiki-make', 'wiki-maker');
+  const node = state.graph.nodes.find((item) => item.id === 'wiki-make');
+  const markdown = buildGraphNodeMarkdown(state, 'wiki-make', 1);
+
+  assert.equal(node.agentId, 'forge-master');
+  assert.deepEqual(node.agentIds, ['forge-master', 'responsive-ui-ux']);
+  assert.match(node.review.spec, /Agents forge-master, responsive-ui-ux own this graph node/);
+  assert.match(markdown, /- Assigned Agents: Forge Master \(forge-master\), Responsive UI\/UX Expert Agent \(responsive-ui-ux\)/);
 });
 
 test('assignAgentToNode ignores unknown agent ids', () => {
@@ -256,7 +273,7 @@ test('node work sections are customizable and pack into AI-ready markdown', () =
 
   assert.equal(removed.graph.nodes.find((item) => item.id === 'wiki-make').workSections.some((section) => section.id === 'purpose'), false);
   assert.match(markdown, /^# Wiki Make/m);
-  assert.match(markdown, /## Assignment\n\n- Agent: Wiki Maker \(wiki-maker\)/);
+  assert.match(markdown, /## Assignment\n\n- Assigned Agents: Wiki Maker \(wiki-maker\)/);
   assert.match(markdown, /### Goal\n\nBuild the repo knowledge map\./);
   assert.match(markdown, /### Risks\n\nWatch for stale wiki claims\./);
   assert.doesNotMatch(markdown, /Return JSON only/);
@@ -373,14 +390,30 @@ test('graph markdown exports the visible front-end graph and node files for agen
   const startMarkdown = buildGraphNodeMarkdown(state, 'start', 0);
   const files = exportWorkspaceFiles(state);
 
-  assert.match(graphMarkdown, /^# Harness RPG Visible Graph/m);
+  assert.match(graphMarkdown, /^# Harness RPG Static Connectivity/m);
   assert.match(graphMarkdown, /start --> wiki-make/);
-  assert.match(graphMarkdown, /## Nodes/);
+  assert.match(graphMarkdown, /## Connectivity/);
+  assert.doesNotMatch(graphMarkdown, /skills:/);
+  assert.doesNotMatch(graphMarkdown, /Agent Contract/);
   assert.match(startMarkdown, /^# Start/m);
   assert.match(startMarkdown, /> Front-end graph node: 01_START_NODE/m);
   assert.match(startMarkdown, /## Work Brief/);
   assert.equal(files['.harness-rpg/graphs/current/GRAPH.md'], `${graphMarkdown}\n`);
   assert.equal(files['.harness-rpg/graphs/current/01_START_NODE.md'], `${startMarkdown}\n`);
+});
+
+test('node markdown follows user edits and static multi-agent assignment', () => {
+  let state = createInitialState();
+  state = updateNodeText(state, 'wiki-make', { title: 'Edited Wiki Node', description: 'User edited node body.' });
+  state = toggleAgentForNode(state, 'wiki-make', 'forge-master');
+  const nodeMarkdown = buildGraphNodeMarkdown(state, 'wiki-make', 1);
+  const files = exportWorkspaceFiles(state);
+
+  assert.match(nodeMarkdown, /^# Edited Wiki Node/m);
+  assert.match(nodeMarkdown, /User edited node body/);
+  assert.match(nodeMarkdown, /- Assigned Agents: Wiki Maker \(wiki-maker\), Forge Master \(forge-master\)/);
+  assert.equal(files['.harness-rpg/graphs/current/02_EDITED_WIKI_NODE_NODE.md'], `${nodeMarkdown}\n`);
+  assert.equal(files['.harness-rpg/graphs/current/02_WIKI_MAKE_NODE.md'], undefined);
 });
 
 test('skill usage summary explains which skills an agent used and why', () => {
@@ -394,6 +427,16 @@ test('skill usage summary explains which skills an agent used and why', () => {
   assert.match(wikiUsage[1].reason, /graph/i);
   assert.equal(plannerUsage[0].skillName, 'Ouroboros Plan');
   assert.match(plannerUsage[0].reason, /execution-ready plan/i);
+});
+
+test('skill usage summary attributes multi-agent nodes to each assigned agent', () => {
+  let state = createInitialState();
+  state = toggleAgentForNode(state, 'wiki-make', 'forge-master');
+  state = toggleAgentForNode(state, 'wiki-make', 'responsive-ui-ux');
+  const usage = buildSkillUsageSummary(state, 'wiki-make');
+
+  assert.equal(usage.filter((entry) => entry.skillId === 'wiki-ingest-source').length, 3);
+  assert.deepEqual(new Set(usage.map((entry) => entry.agentId)), new Set(['wiki-maker', 'forge-master', 'responsive-ui-ux']));
 });
 
 test('graph result report is unavailable until the full war plan graph completes', () => {
@@ -507,6 +550,25 @@ test('applyWarPlanSpec updates graph nodes and preserves protected system nodes'
   assert.equal(updated.selectedNodeId, 'responsive-review');
 });
 
+test('applyWarPlanSpec keeps imported primary agent first in multi-agent assignment', () => {
+  const updated = applyWarPlanSpec(createInitialState(), {
+    protocol: 'harness-rpg-war-plan-v1',
+    nodes: [
+      { id: 'wiki-make', title: 'Map Product Lore', description: 'Ask multiple agents for repo-aware wiki tasks.', agentId: 'forge-master', agentIds: ['wiki-maker', 'responsive-ui-ux'], skills: ['wiki-query'] },
+    ],
+    edges: [['start', 'wiki-make']],
+  });
+  const node = updated.graph.nodes.find((item) => item.id === 'wiki-make');
+  const markdown = buildGraphNodeMarkdown(updated, 'wiki-make', 1);
+  const protocolNode = buildOuroborosProtocolPayload(updated).currentGraph.nodes.find((item) => item.id === 'wiki-make');
+
+  assert.equal(node.agentId, 'forge-master');
+  assert.deepEqual(node.agentIds, ['forge-master', 'wiki-maker', 'responsive-ui-ux']);
+  assert.match(node.review.spec, /Agents forge-master, wiki-maker, responsive-ui-ux own this graph node/);
+  assert.match(markdown, /- Assigned Agents: Forge Master \(forge-master\), Wiki Maker \(wiki-maker\), Responsive UI\/UX Expert Agent \(responsive-ui-ux\)/);
+  assert.deepEqual(protocolNode.agentIds, ['forge-master', 'wiki-maker', 'responsive-ui-ux']);
+});
+
 test('applyWarPlanSpec normalizes object edges and rejects malformed nodes', () => {
   const updated = applyWarPlanSpec(createInitialState(), {
     protocol: 'harness-rpg-war-plan-v1',
@@ -612,10 +674,16 @@ test('exportWorkspaceFiles emits file-backed Agent.md, skills, and state paths',
 });
 
 test('runGraphUntilBlocked executes nodes through the OpenCode bridge until approval is required', () => {
-  const running = runGraphUntilBlocked(createInitialState());
+  let state = createInitialState();
+  state = toggleAgentForNode(state, 'wiki-make', 'forge-master');
+  const wikiMakerXp = state.agents.find((agent) => agent.id === 'wiki-maker').xp;
+  const forgeMasterXp = state.agents.find((agent) => agent.id === 'forge-master').xp;
+  const running = runGraphUntilBlocked(state);
 
   assert.match(running.graph.nodes.find((node) => node.id === 'start').logs.why, /execution-ready plan/);
   assert.equal(running.graph.nodes.find((node) => node.id === 'wiki-make').status, 'completed');
+  assert.equal(running.agents.find((agent) => agent.id === 'wiki-maker').xp > wikiMakerXp, true);
+  assert.equal(running.agents.find((agent) => agent.id === 'forge-master').xp, forgeMasterXp + 1);
   assert.equal(running.graph.nodes.find((node) => node.id === 'destructive-check').status, 'approval_required');
   assert.equal(running.bridgeEvents.length, 4);
   assert.deepEqual(running.bridgeEvents.at(-1), {
@@ -624,6 +692,16 @@ test('runGraphUntilBlocked executes nodes through the OpenCode bridge until appr
     agentId: 'gate-warden',
     skills: ['wiki-lint'],
   });
+});
+
+test('Ouroboros protocol exposes multi-agent node assignment shape', () => {
+  let state = createInitialState();
+  state = toggleAgentForNode(state, 'wiki-make', 'forge-master');
+  const payload = buildOuroborosProtocolPayload(state);
+  const wikiNode = payload.currentGraph.nodes.find((node) => node.id === 'wiki-make');
+
+  assert.equal(payload.graphSchema.nodeFields.includes('agentIds'), true);
+  assert.deepEqual(wikiNode.agentIds, ['wiki-maker', 'forge-master']);
 });
 
 test('approving the destructive node continues the graph executor to completion', () => {
