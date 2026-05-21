@@ -174,6 +174,20 @@ export function createDevServer(projectRoot = rootDir, options = {}) {
         return;
       }
 
+      if (request.method === 'GET' && request.url === '/api/project-state') {
+        try {
+          const stateJson = await readFile(resolve(projectRoot, '.harness-rpg/state.json'), 'utf8');
+          sendJson(response, 200, { ok: true, state: JSON.parse(stateJson) });
+        } catch (error) {
+          if (error.code === 'ENOENT') {
+            sendJson(response, 200, { ok: true, state: null });
+            return;
+          }
+          throw error;
+        }
+        return;
+      }
+
       if (request.method !== 'GET') {
         sendText(response, 405, 'Method Not Allowed');
         return;

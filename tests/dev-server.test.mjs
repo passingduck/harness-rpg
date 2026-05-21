@@ -150,6 +150,47 @@ test('project info endpoint reports the target project root separately from the 
   }
 });
 
+test('project state endpoint returns target harness state when present', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'harness-rpg-target-state-'));
+  await writeWorkspaceFiles(root, {
+    '.harness-rpg/state.json': '{"project":{"name":"go2-octo-vla-gym","path":"/tmp/testbed"}}\n',
+  });
+  const server = createDevServer(root);
+  await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen));
+
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/api/project-state`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.state.project.name, 'go2-octo-vla-gym');
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('project state endpoint reports empty state when target state is absent', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'harness-rpg-empty-state-'));
+  const server = createDevServer(root);
+  await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen));
+
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/api/project-state`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.state, null);
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('setup.sh installs a project-local launcher for clone-only agent projects', async () => {
   const target = await mkdtemp(join(tmpdir(), 'claude-opencode-codex-project-'));
 
