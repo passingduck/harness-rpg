@@ -18,6 +18,7 @@ import {
   runGraphUntilBlocked,
   getWikiSkillPack,
   deserializeState,
+  deserializeProjectState,
   addWarPlanNode,
   removeWarPlanNode,
   assignAgentToNode,
@@ -663,6 +664,21 @@ test('deserializeState preserves a deliberately removed planner agent for auto-p
 
   assert.equal(migrated.agents.some((agent) => agent.id === 'planner-agent'), false);
   assert.equal(running.bridgeEvents[0].agentId, 'auto-planner');
+});
+
+test('deserializeProjectState keeps target project agents instead of merging default agents', () => {
+  const incoming = {
+    project: { name: 'go2-octo-vla-gym', path: '/tmp/old' },
+    agents: [{ id: 'safety-lead', name: 'Robot Safety Lead', selectedSkills: [], agentMd: '# Safety' }],
+    skills: [],
+    graph: { nodes: [], edges: [] },
+    sessions: [],
+  };
+
+  const state = deserializeProjectState(incoming, '/tmp/testbed');
+
+  assert.equal(state.project.path, '/tmp/testbed');
+  assert.deepEqual(state.agents.map((agent) => agent.id), ['safety-lead']);
 });
 
 test('exportWorkspaceFiles emits file-backed Agent.md, skills, and state paths', () => {

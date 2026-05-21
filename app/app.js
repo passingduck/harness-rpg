@@ -1,5 +1,6 @@
 import {
   deserializeState,
+  deserializeProjectState,
   serializeState,
   assignSkillToAgent,
   assignAgentToNode,
@@ -48,6 +49,7 @@ const STORAGE_KEY = 'harness-rpg-state-v1';
 let state = deserializeState(localStorage.getItem(STORAGE_KEY));
 let exportStatus = '';
 let bridgeStatus = '';
+let hasHydratedProjectState = false;
 let dragState = null;
 let marketplaceTab = 'agents';
 let mainTab = 'work';
@@ -893,7 +895,9 @@ async function hydrateProjectInfo() {
     const response = await fetch('/api/project-info');
     if (!response.ok) return;
     const payload = await response.json();
-    if (!payload.projectRoot || state.project.path === payload.projectRoot) return;
+    if (!payload.projectRoot) return;
+    await hydrateProjectState(payload.projectRoot);
+    if (state.project.path === payload.projectRoot) return;
     const projectName = payload.projectRoot.split('/').filter(Boolean).at(-1) ?? state.project.name;
     save({
       ...state,
@@ -906,6 +910,20 @@ async function hydrateProjectInfo() {
   } catch {
     // Static file previews can run without the dev-server metadata endpoint.
   }
+}
+
+async function hydrateProjectState(projectRoot) {
+  if (hasHydratedProjectState) return;
+  hasHydratedProjectState = true;
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) return;
+  const response = await fetch('/api/project-state');
+  if (!response.ok) return;
+  const payload = await response.json();
+  if (!payload.state) return;
+  state = deserializeProjectState(payload.state, projectRoot);
+  persistState();
+  render();
 }
 
 render();

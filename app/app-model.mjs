@@ -1548,6 +1548,38 @@ export function deserializeState(raw) {
   }
 }
 
+export function deserializeProjectState(projectState, projectRoot) {
+  const incoming = typeof projectState === 'string' ? JSON.parse(projectState) : projectState;
+  const fallback = createInitialState();
+  const state = {
+    ...fallback,
+    ...incoming,
+    project: {
+      ...fallback.project,
+      ...(incoming.project ?? {}),
+      ...(projectRoot ? { path: projectRoot } : {}),
+    },
+    backend: {
+      ...backendDefaults,
+      ...(incoming.backend ?? {}),
+      bridge: {
+        ...backendDefaults.bridge,
+        ...(incoming.backend?.bridge ?? {}),
+      },
+    },
+    agents: Array.isArray(incoming.agents) ? incoming.agents : fallback.agents,
+    skills: Array.isArray(incoming.skills) ? incoming.skills : fallback.skills,
+    graph: incoming.graph ?? fallback.graph,
+    sessions: Array.isArray(incoming.sessions) ? incoming.sessions : fallback.sessions,
+    bridgeEvents: incoming.bridgeEvents ?? [],
+    resultReports: incoming.resultReports ?? [],
+  };
+  return {
+    ...state,
+    pools: incoming.pools ?? createPoolsFromState(state),
+  };
+}
+
 function migrateState(state) {
   const defaults = createInitialState();
   const savedStartNode = state.graph?.nodes?.find((nodeItem) => nodeItem.id === 'start');
