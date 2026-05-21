@@ -16,11 +16,29 @@ See `docs/harness-rpg-product-spec.md` for the full product spec.
 ## Run
 
 ```bash
-npm install
 npm start
 ```
 
 Open <http://localhost:4173>.
+
+`npm install` is not required for the web prototype runtime; the app uses Node.js built-ins. The only npm package in this repo is the optional Biome dev dependency.
+
+## Use from an existing agent project
+
+From a cloned Harness RPG repo, install a launcher into any existing Claude Code, OpenCode, Copilot, Codex, or other agent workspace:
+
+```bash
+bash /path/to/harness-rpg/setup.sh /path/to/agent-project
+```
+
+Then run it from that project:
+
+```bash
+cd /path/to/agent-project
+./.harness-rpg/bin/harness-rpg
+```
+
+The launcher serves the Harness RPG UI from the cloned repo, but all exports, graph node markdown, OpenCode artifacts, and `.harness-rpg/state.json` are written inside the target project. Use `PORT=4173` or `OPENCODE_TIMEOUT_MS=60000` before the launcher to override defaults.
 
 ## Verify
 
@@ -36,11 +54,12 @@ npm run build
 - Edit `Agent.md`-style markdown in the agent inspector.
 - Select existing OpenCode-style markdown skills in the RPG skill tree.
 - Start the tutorial war-plan graph.
-- The graph runs `Start` and `wiki-make` with default assigned agents, and nodes can be configured with multiple static agents.
+- The graph runs nodes through the local OpenCode bridge when `opencode` is available, falling back to the local simulator if the bridge fails or times out.
+- Nodes can be configured with multiple static agents.
 - Node details show assigned agents, assigned skills, friendly logs, raw OpenCode bridge events, and artifacts while work is being configured or running.
 - The Result tab stores the completed war-plan report, including which skills were actually used and why, after the graph finishes; skill usage can be filtered by node, agent, and skill.
 - Destructive command nodes pause behind an approval gate.
 - Sessions can be created and forked.
 - The LLM Wiki surface visualizes `llm_wiki` concepts as a local-first RPG world map.
 
-This first pass models OpenCode MCP/API bridge events locally. It does not call a foundation LLM or require provider keys.
+The static markdown export remains the source of truth. The dev server can call the local `opencode run` CLI per graph node and records the returned output as bridge events, node logs, artifacts, and Result report evidence. If OpenCode is unavailable, the local simulator path still keeps the prototype usable without provider keys.

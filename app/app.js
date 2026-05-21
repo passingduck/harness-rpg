@@ -18,6 +18,10 @@ import {
   getGraphProgress,
   startTutorialSession,
   approveDestructiveNode,
+  markNodeApprovalRequired,
+  finalizeGraphResultReport,
+  buildOpenCodeNodeRequest,
+  applyOpenCodeNodeResult,
   addWarPlanNode,
   removeWarPlanNode,
   moveWarPlanNode,
@@ -43,6 +47,7 @@ import {
 const STORAGE_KEY = 'harness-rpg-state-v1';
 let state = deserializeState(localStorage.getItem(STORAGE_KEY));
 let exportStatus = '';
+let bridgeStatus = '';
 let dragState = null;
 let marketplaceTab = 'agents';
 let mainTab = 'work';
@@ -53,7 +58,7 @@ const copy = {
     tagline: 'OpenCode MCP/API 브릿지 · 로컬 우선 에이전트 작업대',
     project: '프로젝트', openProject: '프로젝트 열기', stateDir: '상태 디렉터리',
     localBackend: '로컬 백엔드', database: 'SQLite DB', fileState: '파일 상태', bridgeMode: '브릿지', exportedFiles: '파일-backed export', bridgeEvents: '브릿지 이벤트',
-    exportWorkspace: '파일로 저장', exportReady: '저장 준비됨', exportDone: '파일 저장 완료', exportFailed: '파일 저장 실패',
+    exportWorkspace: '파일로 저장', exportReady: '저장 준비됨', exportDone: '파일 저장 완료', exportFailed: '파일 저장 실패', opencodeRunning: 'OpenCode 실행 중', opencodeDone: 'OpenCode 실행 완료', opencodeFallback: 'OpenCode 실패: 로컬 시뮬레이션으로 전환',
     agentParty: '에이전트 파티', sessions: '세션', newSession: '새 세션', fork: '포크',
     warPlan: '전쟁 계획 튜토리얼', sessionStart: '세션 시작', approve: '파괴 명령 승인',
     addNode: '노드 추가', removeNode: '선택 노드 제거',
@@ -75,7 +80,7 @@ const copy = {
     tagline: 'OpenCode MCP/API bridge · local-first agent workbench',
     project: 'Project', openProject: 'Open Project', stateDir: 'State dir',
     localBackend: 'Local Backend', database: 'SQLite DB', fileState: 'File State', bridgeMode: 'Bridge', exportedFiles: 'File-backed Export', bridgeEvents: 'Bridge Events',
-    exportWorkspace: 'Save to Files', exportReady: 'Ready to save', exportDone: 'Files saved', exportFailed: 'File save failed',
+    exportWorkspace: 'Save to Files', exportReady: 'Ready to save', exportDone: 'Files saved', exportFailed: 'File save failed', opencodeRunning: 'OpenCode running', opencodeDone: 'OpenCode run complete', opencodeFallback: 'OpenCode failed: switched to local simulation',
     agentParty: 'Agent Party', sessions: 'Sessions', newSession: 'New Session', fork: 'Fork',
     warPlan: 'War Plan Tutorial', sessionStart: 'Session Start', approve: 'Approve Destructive Command',
     addNode: 'Add Node', removeNode: 'Remove Selected Node',
@@ -660,6 +665,7 @@ function render() {
             <button id="remove-node" class="secondary" ${canRemoveWarPlanNode(state, node.id) ? '' : 'disabled'}>${t('removeNode')}</button>
             ${node.status === 'approval_required' ? `<button id="approve-node" class="secondary">${t('approve')}</button>` : ''}
           </div>
+          ${bridgeStatus ? `<p class="export-status">${esc(bridgeStatus)}</p>` : ''}
           <div class="graph" aria-label="Diablo-style war plan graph">${renderGraph()}</div>
         </section>
         ${renderMainTab(node, agent)}
@@ -686,14 +692,10 @@ function bindEvents() {
   document.querySelector('#toggle-locale')?.addEventListener('click', () => save(setLocale(state, state.locale === 'ko' ? 'en' : 'ko')));
   document.querySelector('#open-project')?.addEventListener('click', () => save({ ...state, project: { ...state.project, opened: true } }));
   document.querySelector('#export-workspace')?.addEventListener('click', exportWorkspaceToFiles);
-  document.querySelector('#start-session')?.addEventListener('click', () => save(startTutorialSession(state)));
+  document.querySelector('#start-session')?.addEventListener('click', () => runOpenCodeGraphFromCurrent());
   document.querySelector('#add-node')?.addEventListener('click', () => save(addWarPlanNode(state)));
   document.querySelector('#remove-node')?.addEventListener('click', () => save(removeWarPlanNode(state, state.selectedNodeId)));
-  document.querySelector('#approve-node')?.addEventListener('click', () => {
-    const next = approveDestructiveNode(state, state.selectedNodeId);
-    if (buildGraphResultReport(next)) mainTab = 'result';
-    save(next);
-  });
+  document.querySelector('#approve-node')?.addEventListener('click', () => runOpenCodeGraphFromCurrent(state.selectedNodeId));
   document.querySelectorAll('[data-main-tab]').forEach((element) => element.addEventListener('click', () => {
     mainTab = element.dataset.mainTab;
     render();
@@ -842,4 +844,69 @@ async function exportWorkspaceToFiles() {
   render();
 }
 
+async function runOpenCodeGraphFromCurrent(approvedNodeId = '') {
+  let current = state;
+  bridgeStatus = t('opencodeRunning');
+  render();
+  try {
+    for (const graphNode of current.graph.nodes) {
+      const node = current.graph.nodes.find((candidate) => candidate.id === graphNode.id);
+      if (!node || node.status === 'completed') continue;
+      if (node.destructive && node.id !== approvedNodeId) {
+        current = markNodeApprovalRequired(current, node.id);
+        bridgeStatus = '';
+        save(current);
+        return;
+      }
+      const result = await runOpenCodeNode(current, node.id);
+      current = applyOpenCodeNodeResult(current, result);
+      state = current;
+      persistState();
+      render();
+    }
+    current = finalizeGraphResultReport(current);
+    if (buildGraphResultReport(current)) mainTab = 'result';
+    bridgeStatus = t('opencodeDone');
+    save(current);
+  } catch (error) {
+    bridgeStatus = `${t('opencodeFallback')}: ${error.message}`;
+    const fallback = approvedNodeId ? approveDestructiveNode(current, approvedNodeId) : startTutorialSession(current);
+    if (buildGraphResultReport(fallback)) mainTab = 'result';
+    save(fallback);
+  }
+}
+
+async function runOpenCodeNode(current, nodeId) {
+  const response = await fetch('/api/opencode-node', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(buildOpenCodeNodeRequest(current, nodeId)),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const payload = await response.json();
+  if (payload.ok === false) throw new Error(payload.error ?? 'OpenCode bridge failed');
+  return payload;
+}
+
+async function hydrateProjectInfo() {
+  try {
+    const response = await fetch('/api/project-info');
+    if (!response.ok) return;
+    const payload = await response.json();
+    if (!payload.projectRoot || state.project.path === payload.projectRoot) return;
+    const projectName = payload.projectRoot.split('/').filter(Boolean).at(-1) ?? state.project.name;
+    save({
+      ...state,
+      project: {
+        ...state.project,
+        name: projectName,
+        path: payload.projectRoot,
+      },
+    });
+  } catch {
+    // Static file previews can run without the dev-server metadata endpoint.
+  }
+}
+
 render();
+hydrateProjectInfo();

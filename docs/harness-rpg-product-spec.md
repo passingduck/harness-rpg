@@ -30,6 +30,8 @@ The current prototype models these reasons with:
 - a war-plan graph with node-level single-agent or multi-agent assignment and logs;
 - node details showing assigned skills, friendly logs, raw logs, and artifacts during configuration or execution;
 - a persistent Result report showing completed skill usage and why-used explanations after the full graph finishes, with node, agent, and skill filters;
+- local OpenCode execution through node-scoped markdown prompts when the `opencode` CLI is available, with a safe simulator fallback when the bridge fails;
+- clone-only setup for existing Claude Code, OpenCode, Copilot, Codex, and other agent projects through `setup.sh`, which installs a target-local launcher under `.harness-rpg/bin/` while keeping exports in the target project;
 - agent cards, Agent.md editing, and skill selection;
 - session/fork affordances;
 - Korean-first human UI with English agent markdown preserved.
