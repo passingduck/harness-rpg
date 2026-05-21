@@ -1073,6 +1073,77 @@ export function exportWorkspaceFiles(state) {
   return files;
 }
 
+export function buildOpenCodeNodeRequest(state, nodeId) {
+  const nodeItem = state.graph.nodes.find((node) => node.id === nodeId) ?? state.graph.nodes[0];
+  const agentIds = resolveNodeAgentIds(state, nodeItem);
+  const agentList = agentIds.map((agentId) => {
+    const agent = state.agents.find((item) => item.id === agentId);
+    return agent ? `${agent.name} (${agent.id})` : agentId;
+  });
+  const skillList = nodeItem.skills.map((skillId) => {
+    const skill = state.skills.find((item) => item.id === skillId);
+    return skill ? `${skill.name} (${skill.id})` : skillId;
+  });
+  return {
+    nodeId: nodeItem.id,
+    agentId: agentIds[0] ?? nodeItem.agentId,
+    agentIds,
+    skills: [...nodeItem.skills],
+    files: exportWorkspaceFiles(state),
+    prompt: [
+      'You are executing one Harness RPG graph node through OpenCode.',
+      '',
+      'Use the exported markdown files as the source of truth. Do not modify files unless the node brief explicitly asks for file changes.',
+      '',
+      `Execution Lead: ${agentList[0] ?? 'System'}`,
+      `Assigned Agents: ${agentList.join(', ') || 'System'}`,
+      `Assigned Skills: ${skillList.join(', ') || 'none'}`,
+      '',
+      buildGraphNodeMarkdown(state, nodeItem.id),
+      '',
+      'Return a concise node result with: summary, evidence, artifacts, and any risk or follow-up.',
+    ].join('\n'),
+  };
+}
+
+export function applyOpenCodeNodeResult(state, result) {
+  const nodeId = result.nodeId;
+  const nodeItem = state.graph.nodes.find((node) => node.id === nodeId);
+  if (!nodeItem) return state;
+  const agentId = result.agentId ?? resolveNodeAgentId(state, nodeItem);
+  const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim() || 'OpenCode completed without text output.';
+  const artifact = result.artifact ?? `.harness-rpg/opencode/${nodeId}-result.md`;
+  const completedNode = completeNode({ ...nodeItem, agentId }, agentId);
+  const nextState = {
+    ...state,
+    agents: agentId !== 'System' ? awardClearedNodeExperience(state.agents, [nodeItem]) : state.agents,
+    graph: {
+      ...state.graph,
+      nodes: state.graph.nodes.map((candidate) => candidate.id === nodeId ? {
+        ...completedNode,
+        logs: {
+          friendly: `OpenCode completed ${nodeItem.title} with ${agentId}.`,
+          raw: output,
+          artifacts: [artifact],
+          why: `${nodeItem.skills.join(', ') || 'No explicit skill'} ran through the local OpenCode bridge for this node.`,
+        },
+        review: {
+          ...completedNode.review,
+          summary: `OpenCode completed ${nodeItem.title}.`,
+          log: `Log: ${output}`,
+          result: `Result: ${output}`,
+        },
+      } : candidate),
+    },
+  };
+  return appendBridgeEvent(nextState, {
+    type: 'opencode.node.completed',
+    nodeId,
+    agentId,
+    skills: result.skills ?? nodeItem.skills,
+  });
+}
+
 function updateGraphNode(state, nodeId, updater) {
   return {
     ...state,
@@ -1421,6 +1492,19 @@ export function approveDestructiveNode(state, nodeId) {
     ...running,
     selectedNodeId: blockedNode?.id ?? nodeId,
     sessions: running.sessions.map((session) => session.id === running.activeSessionId && !blockedNode ? { ...session, status: 'completed' } : session),
+  };
+}
+
+export function markNodeApprovalRequired(state, nodeId) {
+  return requireApproval(state, nodeId);
+}
+
+export function finalizeGraphResultReport(state) {
+  const finalized = persistGraphResultReport(state);
+  const report = buildGraphResultReport(finalized);
+  return {
+    ...finalized,
+    sessions: finalized.sessions.map((session) => session.id === finalized.activeSessionId && report ? { ...session, status: 'completed' } : session),
   };
 }
 

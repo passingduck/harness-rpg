@@ -11,6 +11,10 @@ import {
   updateAgentProfile,
   getGraphProgress,
   exportWorkspaceFiles,
+  buildOpenCodeNodeRequest,
+  applyOpenCodeNodeResult,
+  markNodeApprovalRequired,
+  finalizeGraphResultReport,
   runGraphUntilBlocked,
   getWikiSkillPack,
   deserializeState,
@@ -671,6 +675,57 @@ test('exportWorkspaceFiles emits file-backed Agent.md, skills, and state paths',
   assert.match(files['.harness-rpg/nodes/wiki-make/work.md'], /^# Wiki Make/);
   assert.equal(files['.harness-rpg/specs/ouroboros-war-plan-protocol.json'], undefined);
   assert.match(files['.harness-rpg/state.json'], /"activeSessionId": "session-001"/);
+});
+
+test('buildOpenCodeNodeRequest packs the selected node markdown, agents, and skills', () => {
+  let state = createInitialState();
+  state = toggleAgentForNode(state, 'wiki-make', 'forge-master');
+
+  const request = buildOpenCodeNodeRequest(state, 'wiki-make');
+
+  assert.equal(request.nodeId, 'wiki-make');
+  assert.equal(request.agentId, 'wiki-maker');
+  assert.deepEqual(request.agentIds, ['wiki-maker', 'forge-master']);
+  assert.deepEqual(request.skills, ['wiki-ingest-source', 'wiki-build-graph']);
+  assert.match(request.prompt, /# Wiki Make/);
+  assert.match(request.prompt, /Assigned Agents: Wiki Maker \(wiki-maker\), Forge Master \(forge-master\)/);
+  assert.match(request.prompt, /Return a concise node result/);
+});
+
+test('applyOpenCodeNodeResult completes a node with actual OpenCode output evidence', () => {
+  const state = createInitialState();
+  const updated = applyOpenCodeNodeResult(state, {
+    nodeId: 'wiki-make',
+    agentId: 'wiki-maker',
+    agentIds: ['wiki-maker'],
+    skills: ['wiki-ingest-source', 'wiki-build-graph'],
+    stdout: 'created wiki index and overview',
+    stderr: '',
+    artifact: '.harness-rpg/opencode/wiki-make-result.md',
+  });
+  const node = updated.graph.nodes.find((item) => item.id === 'wiki-make');
+
+  assert.equal(node.status, 'completed');
+  assert.match(node.logs.friendly, /OpenCode completed Wiki Make/);
+  assert.match(node.logs.raw, /created wiki index and overview/);
+  assert.deepEqual(node.logs.artifacts, ['.harness-rpg/opencode/wiki-make-result.md']);
+  assert.equal(updated.bridgeEvents.at(-1).type, 'opencode.node.completed');
+});
+
+test('markNodeApprovalRequired and finalizeGraphResultReport support async OpenCode graph flow', () => {
+  let state = createInitialState();
+  state = applyOpenCodeNodeResult(state, { nodeId: 'start', agentId: 'planner-agent', skills: ['ouroboros-plan'], stdout: 'planned' });
+  state = applyOpenCodeNodeResult(state, { nodeId: 'wiki-make', agentId: 'wiki-maker', skills: ['wiki-ingest-source'], stdout: 'wiki done' });
+  state = applyOpenCodeNodeResult(state, { nodeId: 'skill-attune', agentId: 'wiki-maker', skills: ['wiki-enrich-wikilinks'], stdout: 'skills done' });
+  state = markNodeApprovalRequired(state, 'destructive-check');
+
+  assert.equal(state.graph.nodes.find((node) => node.id === 'destructive-check').status, 'approval_required');
+  state = applyOpenCodeNodeResult(state, { nodeId: 'destructive-check', agentId: 'gate-warden', skills: ['wiki-lint'], stdout: 'approved gate done' });
+  state = applyOpenCodeNodeResult(state, { nodeId: 'session-plan', agentId: 'forge-master', skills: ['wiki-query'], stdout: 'session plan done' });
+  state = finalizeGraphResultReport(state);
+
+  assert.equal(state.resultReports.length, 1);
+  assert.equal(state.sessions.find((session) => session.id === state.activeSessionId).status, 'completed');
 });
 
 test('runGraphUntilBlocked executes nodes through the OpenCode bridge until approval is required', () => {
