@@ -210,6 +210,8 @@ test('setup.sh installs a project-local launcher for clone-only agent projects',
     assert.match(envText, new RegExp(`HARNESS_RPG_PROJECT_ROOT=${target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
     assert.match(envText, /HARNESS_RPG_ROOT=/);
     assert.match(readmeText, /Claude Code, OpenCode, Copilot, Codex/);
+    assert.match(readmeText, /Do not run `npm start` from the target project/);
+    assert.doesNotMatch(stdout, /Run with npm/);
     assert.notEqual(launcherMode & 0o111, 0);
   } finally {
     await rm(target, { recursive: true, force: true });

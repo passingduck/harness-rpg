@@ -79,6 +79,11 @@ Run:
 ./.harness-rpg/bin/harness-rpg
 \`\`\`
 
+Do not run \`npm start\` from the target project unless that project already owns
+its own npm script. Harness RPG is hosted by the launcher above. The launcher
+points back to the cloned Harness RPG repository and keeps this project's state
+under \`.harness-rpg/\`.
+
 Optional environment variables:
 
 - \`PORT=4173\` to choose the web server port.
@@ -92,3 +97,4 @@ README
 echo "Harness RPG installed for: $target_root"
 echo "Launcher: $launcher"
 echo "Run: $launcher"
+echo "From the target project, run: ./.harness-rpg/bin/harness-rpg"

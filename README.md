@@ -38,6 +38,8 @@ cd /path/to/agent-project
 ./.harness-rpg/bin/harness-rpg
 ```
 
+Do not run `npm start` from the target project unless that project already owns its own npm script. The target project only needs the generated `.harness-rpg/bin/harness-rpg` launcher; the launcher hosts Harness RPG from the cloned repo and points state/artifacts back at the target project.
+
 The launcher serves the Harness RPG UI from the cloned repo, but all exports, graph node markdown, OpenCode artifacts, and `.harness-rpg/state.json` are written inside the target project. Use `PORT=4173` or `OPENCODE_TIMEOUT_MS=60000` before the launcher to override defaults.
 
 ## Verify
